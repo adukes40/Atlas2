@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<div class="grid">
+  <section class="card">
+    <div class="card-head"><h2>Organization</h2></div>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+      </div>
+      {% endfor %}
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Integrations</h2></div>
+    <dl>
+      {% for name in systems %}<div class="kv"><dt>{{ name }}</dt><dd>Not connected</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+</div>
+{% endblock %}

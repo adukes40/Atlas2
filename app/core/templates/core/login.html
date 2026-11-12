@@ -1,0 +1,24 @@
+{% extends "core/page.html" %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<main class="signin">
+  <div class="card">
+    <p class="brand-app">ATLAS</p>
+    <h1>{{ org.name }}</h1>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      {% if form.errors %}<ul class="errorlist field" role="alert"><li>That username and password did not match. Try again.</li></ul>{% endif %}
+      <div class="field">
+        <label for="id_username">Username</label>
+        <input id="id_username" name="username" type="text" autocomplete="username" autocapitalize="none" autofocus required>
+      </div>
+      <div class="field">
+        <label for="id_password">Password</label>
+        <input id="id_password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

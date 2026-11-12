@@ -1,0 +1,62 @@
+{% extends "core/page.html" %}
+{% block body %}
+<a class="skip" href="#main">Skip to main content</a>
+<div class="shell">
+  <div class="rail">
+    <div class="brand">
+      <div class="brand-org">{{ org.name }}</div>
+      <div class="brand-app">ATLAS</div>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a href="{% url 'device360' %}"{% if section == 'device360' %} aria-current="page"{% endif %}>
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><line x1="10.2" y1="10.2" x2="14" y2="14"/></svg>
+        Device 360</a>
+      <a href="{% url 'reports' %}"{% if section == 'reports' %} aria-current="page"{% endif %}>
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><line x1="2.5" y1="13.5" x2="13.5" y2="13.5"/><rect x="3.5" y="7" width="2.6" height="4.5"/><rect x="8.5" y="3.5" width="2.6" height="8"/></svg>
+        Reports</a>
+      {% if user.is_superuser %}
+      <a href="{% url 'settings' %}"{% if section == 'settings' %} aria-current="page"{% endif %}>
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><circle cx="8" cy="8" r="5.6"/></svg>
+        Settings</a>
+      {% endif %}
+      <a href="{% url 'system' %}"{% if section == 'system' %} aria-current="page"{% endif %}>
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="4"/><rect x="2.5" y="9.5" width="11" height="3"/></svg>
+        System</a>
+    </nav>
+    <section class="systems" aria-labelledby="systems-h">
+      <h2 id="systems-h">Connected systems</h2>
+      <ul>
+        {% for name in systems %}<li>{{ name }} <span>Not connected</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    <div class="session">
+      <div>{% firstof user.get_full_name user.get_username %}<small>{% if user.is_superuser %}Administrator{% else %}Signed in{% endif %}</small></div>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="linkbtn" type="submit">Sign out</button></form>
+    </div>
+  </div>
+
+  <div class="work">
+    <header class="topbar">
+      <form class="lookup" role="search" method="get" action="{% url 'device360' %}">
+        <div>
+          <label for="q">Asset tag or serial number</label>
+          <input id="q" name="q" type="text" value="{{ query|default:'' }}" autocomplete="off" spellcheck="false" placeholder="Type or scan, then press Enter"{% if section == 'device360' %} autofocus{% endif %}>
+        </div>
+        <button class="btn" type="submit">Look up</button>
+      </form>
+      <form class="mode" method="post" action="{% url 'appearance' %}" role="group" aria-label="Appearance">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button name="mode" value="light" aria-pressed="{% if mode == 'light' %}true{% else %}false{% endif %}">Light</button>
+        <button name="mode" value="dark" aria-pressed="{% if mode == 'dark' %}true{% else %}false{% endif %}">Dark</button>
+        <button name="mode" value="system" aria-pressed="{% if mode %}false{% else %}true{% endif %}">Auto</button>
+      </form>
+    </header>
+    <main id="main">
+      {% for message in messages %}<p class="flash" role="status">{{ message }}</p>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

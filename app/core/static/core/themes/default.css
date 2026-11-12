@@ -1,0 +1,66 @@
+/* Atlas default theme: neutral, no organization branding. */
+:root {
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-heading: var(--font-body);
+  --h1-weight: 600;
+  --h2-weight: 600;
+  --radius: 4px;
+  --radius-card: 8px;
+  --radius-chip: 999px;
+  --rule: 1px solid var(--line);
+
+  --rail: #1c232d;
+  --rail-ink: #ffffff;
+  --rail-ink2: rgba(255, 255, 255, .82);
+  --rail-accent: #6db8ee;
+  --rail-active: rgba(255, 255, 255, .12);
+  --rail-line: rgba(255, 255, 255, .3);
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --field: #ffffff;
+  --line: #dfe2e7;
+  --ink: #1a2029;
+  --ink2: #4d5663;
+  --heading: #1a2029;
+  --link: #1667a8;
+  --focus: #1667a8;
+  --btn: #1667a8;
+  --btn-ink: #ffffff;
+  --ok: #17633a;
+  --warn: #8a4500;
+}
+
+:root[data-mode="dark"] {
+  --bg: #13161b;
+  --surface: #1b2027;
+  --field: #13161b;
+  --line: #353c47;
+  --ink: #f0f2f5;
+  --ink2: #b3bac5;
+  --heading: #ffffff;
+  --link: #6db8ee;
+  --focus: #6db8ee;
+  --btn: #6db8ee;
+  --btn-ink: #0c1218;
+  --ok: #72d6a0;
+  --warn: #ffb56b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode="light"]) {
+    --bg: #13161b;
+    --surface: #1b2027;
+    --field: #13161b;
+    --line: #353c47;
+    --ink: #f0f2f5;
+    --ink2: #b3bac5;
+    --heading: #ffffff;
+    --link: #6db8ee;
+    --focus: #6db8ee;
+    --btn: #6db8ee;
+    --btn-ink: #0c1218;
+    --ok: #72d6a0;
+    --warn: #ffb56b;
+  }
+}

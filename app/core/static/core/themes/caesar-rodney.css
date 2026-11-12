@@ -1,0 +1,72 @@
+/* Caesar Rodney School District theme: Rider Blue, Rider Gold, Playfair
+   Display headings, square corners. Fonts are served from Atlas itself. */
+@font-face { font-family: "Playfair Display"; font-weight: 400; font-display: swap; src: url("../fonts/playfair-display-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Playfair Display"; font-weight: 700; font-display: swap; src: url("../fonts/playfair-display-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Carlito"; font-weight: 400; font-display: swap; src: url("../fonts/carlito-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Carlito"; font-weight: 700; font-display: swap; src: url("../fonts/carlito-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  --font-body: Calibri, Carlito, "Segoe UI", Arial, sans-serif;
+  --font-heading: "Playfair Display", "Times New Roman", Times, serif;
+  --h1-weight: 400;
+  --h2-weight: 700;
+  --radius: 4px;
+  --radius-card: 0;
+  --radius-chip: 0;
+  --rule: 2px solid #fcbe14;
+
+  --rail: #000098;
+  --rail-ink: #ffffff;
+  --rail-ink2: rgba(255, 255, 255, .82);
+  --rail-accent: #fcbe14;
+  --rail-active: rgba(255, 255, 255, .12);
+  --rail-line: rgba(255, 255, 255, .3);
+
+  --bg: #f4f4f4;
+  --surface: #ffffff;
+  --field: #ffffff;
+  --line: #d4d4d4;
+  --ink: #000000;
+  --ink2: #474747;
+  --heading: #000098;
+  --link: #000098;
+  --focus: #000098;
+  --btn: #000098;
+  --btn-ink: #ffffff;
+  --ok: #17633a;
+  --warn: #8a4500;
+}
+
+:root[data-mode="dark"] {
+  --bg: #0f0f13;
+  --surface: #1a1a20;
+  --field: #0f0f13;
+  --line: #3a3a44;
+  --ink: #f3f3f3;
+  --ink2: #b9b9c2;
+  --heading: #ffffff;
+  --link: #fcbe14;
+  --focus: #fcbe14;
+  --btn: #fcbe14;
+  --btn-ink: #000098;
+  --ok: #72d6a0;
+  --warn: #ffb56b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode="light"]) {
+    --bg: #0f0f13;
+    --surface: #1a1a20;
+    --field: #0f0f13;
+    --line: #3a3a44;
+    --ink: #f3f3f3;
+    --ink2: #b9b9c2;
+    --heading: #ffffff;
+    --link: #fcbe14;
+    --focus: #fcbe14;
+    --btn: #fcbe14;
+    --btn-ink: #000098;
+    --ok: #72d6a0;
+    --warn: #ffb56b;
+  }
+}
