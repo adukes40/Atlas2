@@ -9,6 +9,7 @@ NO_ID = "00000000-0000-0000-0000-000000000000"
 
 @dataclass
 class Person:
+    user_id: str = ""
     name: str = ""
     email: str = ""
     school_id: str = ""
@@ -20,9 +21,29 @@ class Person:
 
 
 @dataclass
+class Charge:
+    """One unpaid charge from the Fee Tracker."""
+
+    label: str = ""
+    amount: Decimal = Decimal("0")
+    balance: Decimal = Decimal("0")
+    past_due: Decimal = Decimal("0")
+    date: str = ""
+
+    @property
+    def balance_display(self):
+        return f"${self.balance:,.2f}"
+
+    @property
+    def past_due_display(self):
+        return f"${self.past_due:,.2f}"
+
+
+@dataclass
 class Fees:
     balance: Decimal = Decimal("0")
     past_due: Decimal = Decimal("0")
+    charges: list[Charge] = field(default_factory=list)
 
     @property
     def owed(self):
@@ -38,6 +59,14 @@ class Fees:
 
 
 @dataclass
+class Ticket:
+    number: str = ""
+    subject: str = ""
+    status: str = ""
+    opened: str = ""  # YYYY-MM-DD
+
+
+@dataclass
 class Device:
     asset_id: str = ""
     asset_tag: str = ""
@@ -49,6 +78,7 @@ class Device:
     open_tickets: int = 0
     owner: Person | None = None
     fees: Fees = field(default_factory=Fees)
+    tickets: list[Ticket] = field(default_factory=list)  # filled in by the lookup service
 
     @property
     def key(self):
@@ -69,6 +99,9 @@ def _money(value):
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return Decimal("0")
+
+
+LABEL_KEYS = ("Description", "Name", "FeeName", "FeeType", "Title", "Reason")
 
 
 def _fees(raw):
@@ -97,8 +130,19 @@ def _fees(raw):
             if identity in seen:
                 continue
             seen.add(identity)
+            past_due = max(_money(charge.get("PastDueAmount")), Decimal("0"))
             fees.balance += balance
-            fees.past_due += max(_money(charge.get("PastDueAmount")), Decimal("0"))
+            fees.past_due += past_due
+            fees.charges.append(
+                Charge(
+                    # shortcut: the Fee Tracker's name for a charge is not documented; first of these that is set.
+                    label=next((_text(charge.get(k)) for k in LABEL_KEYS if _text(charge.get(k))), "Charge"),
+                    amount=_money(charge.get("Amount")),
+                    balance=balance,
+                    past_due=past_due,
+                    date=_text(charge.get("LastActivityDate"))[:10],
+                )
+            )
         return fees
     return Fees()
 
@@ -111,7 +155,9 @@ def normalize_asset(raw):
     person = None
     if _text(owner.get("UserId")) not in ("", NO_ID) or _text(owner.get("FullName")):
         location_id = _text(owner.get("LocationId"))
+        user_id = _text(owner.get("UserId"))
         person = Person(
+            user_id="" if user_id == NO_ID else user_id,
             name=_text(owner.get("FullName")),
             email=_text(owner.get("Email")),
             school_id=_text(owner.get("SchoolIdNumber")),
@@ -137,4 +183,13 @@ def normalize_asset(raw):
         open_tickets=open_tickets,
         owner=person,
         fees=_fees(raw),
+    )
+
+
+def normalize_ticket(raw):
+    return Ticket(
+        number=_text(raw.get("TicketNumber")),
+        subject=_text(raw.get("Subject")),
+        status=_text((raw.get("WorkflowStep") or {}).get("StepName")),
+        opened=_text(raw.get("CreatedDate"))[:10],
     )

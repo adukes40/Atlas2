@@ -4,6 +4,7 @@ Raw Incident IQ JSON goes no further than `normalize.py`. Nothing here logs or
 returns the API token.
 """
 
+import json
 from urllib.parse import quote, urlsplit
 
 import requests
@@ -137,3 +138,25 @@ class IncidentIQClient:
     def location_name(self, location_id):
         data = self._request("GET", f"/locations/{quote(location_id, safe='')}")
         return (data.get("Location") or {}).get("Name") or None
+
+    def open_tickets(self, asset_id):
+        """Open tickets on one asset (at most 25).
+
+        Incident IQ has been seen to ignore filters on this call, so every
+        ticket that comes back is checked for the asset before it is kept.
+        """
+        data = self._request(
+            "POST",
+            "/tickets?$s=25",
+            json={"Filters": [{"Facet": "asset", "Id": asset_id}]},
+        )
+        return [
+            item
+            for item in data.get("Items") or []
+            if isinstance(item, dict) and not item.get("IsClosed", True) and _mentions(item, asset_id)
+        ]
+
+
+def _mentions(ticket, asset_id):
+    """True if the asset appears anywhere on the ticket (its shape varies)."""
+    return bool(asset_id) and asset_id in json.dumps(ticket)

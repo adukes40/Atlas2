@@ -19,11 +19,12 @@ from ..http import TIMEOUT, get_json
 SCOPE = "https://www.googleapis.com/auth/admin.directory.device.chromeos.readonly"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEVICES_URL = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/devices/chromeos"
-# Only what Atlas shows. FULL projection is needed for recent users, but its
-# CPU and memory reports are large, so ask for these fields only.
+# Only what Atlas shows. FULL projection is needed for recent users and the
+# memory and disk reports; CPU reports are large, so ask for these fields only.
 FIELDS = (
-    "chromeosdevices(serialNumber,status,orgUnitPath,lastSync,recentUsers,macAddress,ethernetMacAddress,"
-    "model,osVersion,annotatedAssetId,annotatedUser,annotatedLocation,lastKnownNetwork,autoUpdateThrough)"
+    "chromeosdevices(deviceId,serialNumber,status,orgUnitPath,lastSync,recentUsers,macAddress,ethernetMacAddress,"
+    "model,osVersion,annotatedAssetId,annotatedUser,annotatedLocation,lastKnownNetwork,autoUpdateThrough,"
+    "bootMode,systemRamTotal,systemRamFreeReports,diskVolumeReports)"
 )
 
 # Access tokens last an hour. Keep one per process so a lookup does not sign in every time.
