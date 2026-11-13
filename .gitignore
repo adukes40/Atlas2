@@ -12,3 +12,6 @@ app/staticfiles/
 *service-account*.json
 *.sql
 *.dump
+# Working notes kept outside the repo
+CLAUDE.md
+HANDOFF.md
