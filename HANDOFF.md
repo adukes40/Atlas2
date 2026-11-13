@@ -68,7 +68,7 @@ Last updated 2026-11-13 (Reports).
 
 12. Reports and the nightly sync (2026-11-13). Layout "A with B's tiles",
     picked by Austin from four mockups: an Overview of count tiles (with a
-    30-day trend once nights accumulate), then a library of 16 reports, each
+    30-day trend once nights accumulate), then a library of 15 reports, each
     one table with filter chips on any field, Columns, Group by, Save as and
     Export CSV. Column headers and group headings carry the accent colour
     (Austin asked for them to stand out). Technicians see every report.
@@ -90,6 +90,9 @@ Last updated 2026-11-13 (Reports).
     - With 28,000 made-up devices and 14,000 people, the rebuild took 5 s on
       SQLite and every report page loaded in under 150 ms.
     138 tests.
+    Inventory mismatches was dropped as a report the same day (Austin: "those
+    can go away"). The `mismatch` field is still worked out each sync, so it
+    can be filtered on from any device report or brought back as a report.
 
 ## How the three new connections work
 

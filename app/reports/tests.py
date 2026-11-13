@@ -150,7 +150,7 @@ class SyncTests(TestCase):
         sync()
         expected = {
             "not-seen-30": 1, "lost-but-online": 0, "disabled-but-assigned": 0, "signed-in-by-other": 1,
-            "mismatches": 2, "more-than-one": 0, "no-chromebook": 1, "departed-holding": 1, "fee-balances": 1,
+            "more-than-one": 0, "no-chromebook": 1, "departed-holding": 1, "fee-balances": 1,
             "old-chromeos": 1, "wrong-network": 1, "on-wifi-by-school": 1,
         }
         for slug, count in expected.items():
@@ -259,12 +259,13 @@ class PageTests(TestCase):
         self.assertContains(page, "1 device<")
 
     def test_filters_can_be_added_and_removed(self):
-        url = reverse("report", args=["mismatches"])
+        url = reverse("report", args=["signed-in-by-other"])  # any device report: edited filters replace its own
         added = self.client.get(url, {"add_field": "mismatch", "add_op": "has", "add_value": "Google"})
         self.assertEqual(added.status_code, 302)
         page = self.client.get(added["Location"])
         self.assertContains(page, "contains Google")
-        self.assertContains(page, "1 device<")
+        self.assertContains(page, "is yes")  # the report's own filter stays
+        self.assertContains(page, "0 devices")
         none = self.client.get(url, {"edited": "1", "f": ["mismatch.is.Nothing like this"]})
         self.assertContains(none, "Nothing matches these filters.")
         everything = self.client.get(url, {"edited": "1"})
@@ -278,10 +279,10 @@ class PageTests(TestCase):
         self.assertContains(page, "Show every row instead")
 
     def test_csv_export_has_every_row(self):
-        response = self.client.get(reverse("report", args=["mismatches"]), {"format": "csv"})
+        response = self.client.get(reverse("report", args=["signed-in-by-other"]), {"format": "csv"})
         lines = b"".join(response.streaming_content).decode().splitlines()
-        self.assertEqual(lines[0], "Asset tag,Serial,Google asset ID,Mismatch,Model,Google model,Google OU,Google last sync")
-        self.assertEqual(len(lines), 3)
+        self.assertEqual(lines[0], "Asset tag,Serial,Assigned to,School,Model,Assigned email,Last Google sign-in,Google last sync")
+        self.assertEqual(len(lines), 2)
         self.assertIn("attachment", response["Content-Disposition"])
 
     def test_a_report_can_be_saved_and_removed(self):
