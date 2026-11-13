@@ -66,6 +66,7 @@ dl { margin: 0; }
 .kv dt { color: var(--ink2); }
 .kv dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .chip { display: inline-flex; align-items: center; border: 1px solid currentColor; border-radius: var(--radius-chip); padding: 1px 8px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.kv dd .chip { margin-right: 4px; }
 .ok { color: var(--ok); }
 .warn { color: var(--warn); }
 .flash { border: 1px solid var(--ok); color: var(--ok); border-radius: var(--radius); padding: 10px 12px; font-weight: 700; }
