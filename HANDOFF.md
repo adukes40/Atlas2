@@ -12,10 +12,18 @@ Last updated 2026-11-13.
 4. Optional Incident IQ Site ID and Product ID headers for sites that reject
    token-only calls (the combination the original ATLAS used). 69 tests pass.
 
+5. Gunicorn uses threaded workers so idle browser connections no longer time
+   out workers, and its control socket is off (it logged a permission error).
+
 ## Not confirmed
 
-- Whether the Site ID / Product ID change fixed the connection on the
-  district's live Incident IQ site.
+- Whether Incident IQ Save and test works on the live site. An Internal Server
+  Error was reported on 2026-11-13, but the server log after deploying 85e9af9
+  showed no Django error, only the gunicorn noise fixed above.
+
+## Server
+
+Atlas runs in an LXC container as root at /opt/atlas, so commands need no sudo.
 
 ## Next, in rough order
 
