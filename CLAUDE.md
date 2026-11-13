@@ -21,6 +21,7 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   `Connection` model. `devices/service.py` asks Google by serial, then Mist and
   Meraki by Google's MACs. Incident IQ open tickets are found by the assigned
   person (the asset's own count is always 0). `LookupResult.conflicts` holds the Incident IQ vs Google checks.
+  `_add_connection` follows Meraki's switch record to the switch port (Connection card).
 
 ## Conventions
 

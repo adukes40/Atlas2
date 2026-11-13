@@ -10,6 +10,8 @@ from integrations.testing import (
     GOOGLE_DEVICES_URL,
     GOOGLE_KEY,
     MERAKI_API,
+    MERAKI_ON_SWITCH,
+    MERAKI_SWITCH_ROUTES,
     MERAKI_ORG,
     MIST_API,
     MIST_ORG,
@@ -313,6 +315,40 @@ class GoogleAndNetworkTests(TestCase):
         self.assertContains(page, "Incident IQ and Google disagree")
         self.assertContains(page, "Google has asset ID 104428, but Incident IQ has asset tag 104482.")
         self.assertContains(page, "the last sign-in Google saw was someone@students.example")
+
+    def test_the_connection_card_follows_the_access_point_to_its_switch_port(self):
+        self.connect()
+        search = f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search"
+        page = self.look_up(dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{search: MERAKI_ON_SWITCH}))
+        for expected in [
+            "Mist policy: Chromebooks - Student",
+            "Meraki policy: Students",
+            "North-IDF-5, port 38",
+            "The access point's uplink",
+            "Trunk, native 71",
+            "Allows all",
+        ]:
+            self.assertContains(page, expected)
+        # The switch sighting does not take over "Where it is" from Mist.
+        self.assertContains(page, "<b>North Middle School</b>")
+        self.assertNotContains(page, "North-switch")
+
+    def test_a_wired_device_shows_its_own_port(self):
+        self.connect(mist=False)
+        search = f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search"
+        page = self.look_up(dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{search: MERAKI_ON_SWITCH}))
+        self.assertContains(page, "by Meraki, wired")
+        self.assertContains(page, "The device's own port")
+        self.assertContains(page, "VLAN 355")
+
+    def test_a_switch_lookup_problem_is_shown_on_the_connection_card(self):
+        self.connect()
+        search = f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search"
+        routes = dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{search: MERAKI_ON_SWITCH})
+        routes[f"{MERAKI_API}/devices/Q2KW-0000-0001/switch/ports/38"] = FakeResponse(status=500)
+        page = self.look_up(routes)
+        self.assertContains(page, "Meraki: Meraki had an internal error")
+        self.assertContains(page, "<b>North Middle School</b>")
 
     def test_a_google_problem_does_not_sink_the_lookup(self):
         self.connect()

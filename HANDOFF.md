@@ -44,6 +44,17 @@ Last updated 2026-11-13.
    (tag equals serial, last Google sign-in is not the assigned person) plus
    Google's asset ID against the Incident IQ tag. 109 tests pass.
 
+9. Connection card (option 1 path, picked 2026-11-13). Meraki lists a
+   Wi-Fi client on the switch port its Mist AP plugs into (confirmed live:
+   ssid null, switchport = AP uplink), so "Where it is" now leads with the
+   latest Wi-Fi sighting and the Meraki switch record feeds the Connection
+   card: SSID, VLAN, Mist PSK name ("policy"), Meraki client policy (group
+   policy name, else device policy such as Normal), AP, switch name and port
+   (switch found by `recentDeviceMac`, cached a day), and the port's mode,
+   native/access VLAN, allowed VLANs, voice VLAN, PoE. 3 to 4 extra Meraki
+   calls when a switch record exists. Notes in the network card now have a
+   tinted background (`.note`). All switches are Meraki; APs are Mist. 113 tests.
+
 ## How the three new connections work
 
 - Google: service account JSON key (stored encrypted) plus an admin email to

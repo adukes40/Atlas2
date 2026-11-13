@@ -21,4 +21,7 @@ def normalize_client(raw, site="", access_point=""):
         ssid=_text(raw.get("last_ssid")),
         ip=_text(raw.get("last_ip")),
         last_seen=last_seen,
+        wireless=True,
+        vlan=_text(raw.get("last_vlan")),
+        policy=_text(raw.get("last_psk_name")),
     )
