@@ -7,6 +7,7 @@ returns the API key.
 from urllib.parse import quote
 
 import requests
+from django.core.cache import cache
 
 from ..errors import IntegrationError
 from ..http import get_json
@@ -57,3 +58,21 @@ class MerakiClient:
         pretty = ":".join(mac[i : i + 2] for i in range(0, 12, 2))
         data = self._get(f"/organizations/{quote(self.org_id, safe='')}/clients/search", {"mac": pretty})
         return data if isinstance(data, dict) else None
+
+    def switch_by_mac(self, mac):
+        """The switch with this MAC, or None. Remembered for a day: switches rarely move."""
+
+        def fetch():
+            found = self._get(f"/organizations/{quote(self.org_id, safe='')}/devices", {"mac": mac}) or []
+            return next((d for d in found if isinstance(d, dict) and d.get("serial")), None)
+
+        return cache.get_or_set(f"meraki-device:{mac}", fetch, 86400)
+
+    def switch_port(self, serial, port_id):
+        return self._get(f"/devices/{quote(serial, safe='')}/switch/ports/{quote(port_id, safe='')}") or {}
+
+    def client_policy(self, network_id, client_id):
+        return self._get(f"/networks/{quote(network_id, safe='')}/clients/{quote(client_id, safe='')}/policy") or {}
+
+    def group_policies(self, network_id):
+        return self._get(f"/networks/{quote(network_id, safe='')}/groupPolicies") or []

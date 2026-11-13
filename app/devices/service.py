@@ -45,9 +45,24 @@ class LookupResult:
         """The device, when the lookup matched exactly one."""
         return self.devices[0] if len(self.devices) == 1 else None
 
+    connection: object = None  # integrations.network.Connection, from Meraki
+    connection_message: str = ""
+
     @property
     def sighting(self):
-        return self.sightings[0] if self.sightings else None
+        """Where the device is: the latest Wi-Fi sighting. A switch only counts
+        when the device was not on Wi-Fi, since Meraki also lists Wi-Fi clients
+        on their access point's switch port."""
+        wireless = [s for s in self.sightings if s.wireless]
+        return (wireless or self.sightings or [None])[0]
+
+    @property
+    def also_seen(self):
+        return [s for s in self.sightings if s.wireless and s is not self.sighting]
+
+    @property
+    def switch_sighting(self):
+        return next((s for s in self.sightings if s.switch_mac and s.switch_port), None)
 
     @property
     def network_connected(self):
@@ -113,6 +128,7 @@ def lookup(query):
         _add_tickets(client, result.device, result)
         _add_google(result)
         _add_network(result)
+        _add_connection(result)
     result.took_ms = int((time.monotonic() - started) * 1000)
     return result
 
@@ -191,3 +207,28 @@ def _add_network(result):
             part.state = FOUND
             result.sightings.append(sighting)
     result.sightings.sort(key=lambda s: s.last_seen or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+
+def _add_connection(result):
+    """The switch port behind the device, from Meraki: its own port when wired,
+    its access point's uplink when on Wi-Fi. A failure is noted on the card."""
+    seen = result.switch_sighting
+    config = MerakiConfig.load()
+    if not seen or not config.configured:
+        return
+
+    def ask(client):
+        device = client.switch_by_mac(seen.switch_mac)
+        if not device:
+            return None
+        port = client.switch_port(device["serial"], seen.switch_port)
+        policy, groups = {}, []
+        if seen.network_id and seen.client_id:
+            policy = client.client_policy(seen.network_id, seen.client_id)
+            if policy.get("groupPolicyId"):
+                groups = client.group_policies(seen.network_id)
+        return meraki_normalize.normalize_port(device, port or {"portId": seen.switch_port}, policy, groups)
+
+    part = Part(config.name)
+    result.connection = _ask(config, part, ask)
+    result.connection_message = part.message

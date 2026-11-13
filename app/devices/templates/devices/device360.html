@@ -97,28 +97,29 @@
     <div class="card-head"><h2>Where it is</h2><span class="src">Mist · Meraki</span></div>
     {% if seen %}
     <p class="who"><b>{{ seen.place|default:"Unknown site" }}</b></p>
-    <p class="muted">Seen {{ seen.last_seen_ago|default:"at an unknown time" }} by {{ seen.source }}</p>
+    <p class="muted">Seen {{ seen.last_seen_ago|default:"at an unknown time" }} by {{ seen.source }}{% if not seen.wireless %}, wired{% endif %}</p>
     {% endif %}
     <dl>
       {% if seen.access_point %}<div class="kv"><dt>Access point</dt><dd>{{ seen.access_point }}</dd></div>{% endif %}
-      {% if seen.ssid %}<div class="kv"><dt>Network</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
+      {% if seen.ssid %}<div class="kv"><dt>SSID</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
+      {% if seen.vlan %}<div class="kv"><dt>VLAN</dt><dd>{{ seen.vlan }}</dd></div>{% endif %}
       {% if seen.ip or book.last_ip %}<div class="kv"><dt>LAN IP</dt><dd class="mono">{{ seen.ip|default:book.last_ip }}</dd></div>{% endif %}
       {% if book.wan_ip %}<div class="kv"><dt>WAN IP</dt><dd class="mono">{{ book.wan_ip }}</dd></div>{% endif %}
       {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
       {% if seen.last_seen %}<div class="kv"><dt>Last seen</dt><dd>{{ seen.last_seen|date:"M j, g:i A" }} UTC</dd></div>{% endif %}
     </dl>
-    {% if result.sightings|length > 1 %}
+    {% if result.also_seen %}
     <h3>Also seen</h3>
-    <dl>{% for other in result.sightings|slice:"1:" %}<div class="kv"><dt>{{ other.source }}</dt><dd>{{ other.place }}{% if other.access_point %}, {{ other.access_point }}{% endif %}{% if other.last_seen %}, {{ other.last_seen|date:"M j" }}{% endif %}</dd></div>{% endfor %}</dl>
+    <dl>{% for other in result.also_seen %}<div class="kv"><dt>{{ other.source }}</dt><dd>{{ other.place }}{% if other.access_point %}, {{ other.access_point }}{% endif %}{% if other.last_seen %}, {{ other.last_seen|date:"M j" }}{% endif %}</dd></div>{% endfor %}</dl>
     {% endif %}
     {% for part in result.network %}
     {% if part.state == "error" %}<p class="warn">{{ part.name }}: {{ part.message }}</p>
-    {% elif part.state == "not_found" %}<p class="muted">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
+    {% elif part.state == "not_found" %}<p class="note">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
     {% endfor %}
     {% if not result.network_connected %}
-    <p class="muted">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
+    <p class="note">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
     {% endif %}
-    {% if device.location %}<p class="hint">Incident IQ lists it at {{ device.location }}.</p>{% endif %}
+    {% if device.location %}<p class="note">Incident IQ lists it at {{ device.location }}.</p>{% endif %}
   </section>
 
   <section class="card">
@@ -150,8 +151,29 @@
   </section>
 </div>
 
-{% if device.fees.owed or device.open_tickets %}
+{% if device.fees.owed or device.open_tickets or result.switch_sighting or seen.wireless %}
 <div class="grid">
+  {% if result.switch_sighting or seen.wireless %}
+  {% with conn=result.connection wired=result.switch_sighting %}
+  <section class="card">
+    <div class="card-head"><h2>Connection</h2><span class="src">Mist · Meraki</span></div>
+    <ol class="path">
+      {% if seen.wireless %}
+      <li><small>Wireless</small><b>{{ seen.ssid|default:"Wi-Fi" }}{% if seen.vlan %}, VLAN {{ seen.vlan }}{% endif %}</b><span>{% if seen.policy %}Mist policy: {{ seen.policy }}{% endif %}{% if seen.policy and conn.policy %} · {% endif %}{% if conn.policy %}Meraki policy: {{ conn.policy }}{% endif %}</span></li>
+      <li><small>Access point</small><b>{{ seen.access_point|default:"Unknown" }}</b><span>{{ seen.source }}{% if seen.place %} · {{ seen.place }}{% endif %}</span></li>
+      {% else %}
+      <li><small>Wired</small><b>{% if wired.vlan %}VLAN {{ wired.vlan }}{% else %}Ethernet{% endif %}</b><span>{% if conn.policy %}Meraki policy: {{ conn.policy }}{% endif %}</span></li>
+      {% endif %}
+      {% if conn %}
+      <li><small>Switch port</small><b>{{ conn.switch }}, port {{ conn.port }}</b><span>{% if seen.wireless %}The access point's uplink{% else %}The device's own port{% endif %}{% if conn.poe %} · PoE on{% endif %}</span></li>
+      <li><small>Port VLANs</small><b>{{ conn.mode }}{% if conn.vlan %}, {% if conn.mode == "Trunk" %}native {% else %}VLAN {% endif %}{{ conn.vlan }}{% endif %}</b><span>{% if conn.allowed_vlans %}Allows {{ conn.allowed_vlans }}{% endif %}{% if conn.allowed_vlans and conn.voice_vlan %} · {% endif %}{% if conn.voice_vlan %}Voice VLAN {{ conn.voice_vlan }}{% endif %}</span></li>
+      {% endif %}
+    </ol>
+    {% if result.connection_message %}<p class="warn">Meraki: {{ result.connection_message }}</p>
+    {% elif not conn %}<p class="note">The switch port shows here once Meraki sees {% if seen.wireless %}the access point's traffic{% else %}the device{% endif %} on a switch.</p>{% endif %}
+  </section>
+  {% endwith %}
+  {% endif %}
   {% if device.fees.owed %}
   <section class="card">
     <div class="card-head"><h2>Fees owed</h2><span class="src">Fee Tracker</span></div>
