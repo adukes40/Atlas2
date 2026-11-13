@@ -38,7 +38,8 @@ Last updated 2026-11-13 (Reports).
    Google sign-ins), Where it is (Mist or Meraki sighting, LAN and WAN IP,
    MACs), What state it's in (ChromeOS, OU, update date with Supported /
    Ending soon / Expired, boot mode, Google's asset ID, memory and storage
-   use). Fees owed (each Fee Tracker charge) and open tickets show below
+   use). Status pills (On our network, Supported) sit left of their value
+   so the values stay right-aligned. Fees owed (each Fee Tracker charge) and open tickets show below
    when there are any. Open tickets are a new Incident IQ call, made only
    for the assigned person. Disagreement checks are the original ATLAS's
    (tag equals serial, last Google sign-in is not the assigned person) plus

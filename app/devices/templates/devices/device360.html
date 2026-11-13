@@ -104,7 +104,7 @@
       {% if seen.ssid %}<div class="kv"><dt>SSID</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
       {% if seen.vlan %}<div class="kv"><dt>VLAN</dt><dd>{{ seen.vlan }}</dd></div>{% endif %}
       {% if seen.ip or book.last_ip %}<div class="kv"><dt>LAN IP</dt><dd class="mono">{{ seen.ip|default:book.last_ip }}</dd></div>{% endif %}
-      {% if book.wan_ip %}<div class="kv"><dt>WAN IP</dt><dd><span class="mono">{{ book.wan_ip }}</span>{% if wan_on_network is True %} <span class="chip ok">On our network</span>{% elif wan_on_network is False %} <span class="chip warn">Off network</span>{% endif %}</dd></div>{% endif %}
+      {% if book.wan_ip %}<div class="kv"><dt>WAN IP</dt><dd>{% if wan_on_network is True %}<span class="chip ok">On our network</span> {% elif wan_on_network is False %}<span class="chip warn">Off network</span> {% endif %}<span class="mono">{{ book.wan_ip }}</span></dd></div>{% endif %}
       {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
       {% if seen.last_seen %}<div class="kv"><dt>Last seen</dt><dd>{{ seen.last_seen|date:"M j, g:i A" }} UTC</dd></div>{% endif %}
     </dl>
@@ -129,7 +129,7 @@
       {% if book.os_version %}<div class="kv"><dt>ChromeOS</dt><dd class="mono">{{ book.os_version }}</dd></div>{% endif %}
       {% if book.org_unit %}<div class="kv"><dt>OU</dt><dd>{{ book.org_unit }}</dd></div>{% endif %}
       <div class="kv"><dt>Last sync</dt><dd>{% if book.last_sync %}{{ book.last_sync|date:"M j, Y, g:i A" }} UTC{% else %}Never{% endif %}</dd></div>
-      {% if book.updates_until %}<div class="kv"><dt>Updates until</dt><dd>{{ book.updates_until|date:"M Y" }} <span class="chip {% if book.updates_state == 'Supported' %}ok{% else %}warn{% endif %}">{{ book.updates_state }}</span></dd></div>{% endif %}
+      {% if book.updates_until %}<div class="kv"><dt>Updates until</dt><dd><span class="chip {% if book.updates_state == 'Supported' %}ok{% else %}warn{% endif %}">{{ book.updates_state }}</span> {{ book.updates_until|date:"M Y" }}</dd></div>{% endif %}
       {% if book.boot_mode %}<div class="kv"><dt>Boot mode</dt><dd>{{ book.boot_mode }}</dd></div>{% endif %}
       {% if book.asset_id %}<div class="kv"><dt>Asset ID in Google</dt><dd class="mono">{{ book.asset_id }}</dd></div>{% endif %}
     </dl>
