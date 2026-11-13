@@ -1,0 +1,22 @@
+{% extends "core/base.html" %}
+{% block title %}{% if person %}{{ person.get_username }}{% else %}Add a user{% endif %}{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / <a href="{% url 'users' %}">Users</a></p>
+  <h1>{% if person %}{{ person.get_username }}{% else %}Add a user{% endif %}</h1>
+</div>
+<section class="card narrow">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<p class="flash bad" role="alert">{{ form.non_field_errors.0 }}</p>{% endif %}
+    {% for field in form %}
+    <div class="field{% if field.widget_type == 'checkbox' %} check{% endif %}">
+      {% if field.widget_type == 'checkbox' %}<label for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>{% else %}{{ field.label_tag }}{{ field }}{% endif %}
+      {{ field.errors }}
+      {% if field.help_text %}<p class="hint">{{ field.help_text }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <button class="btn" type="submit">Save</button>
+  </form>
+</section>
+{% endblock %}

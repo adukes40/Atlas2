@@ -18,6 +18,10 @@
     </form>
   </section>
   <section class="card">
+    <div class="card-head"><h2>Users</h2><a href="{% url 'users' %}">Manage users</a></div>
+    <p>{{ active_users }} {% if active_users == 1 %}person can{% else %}people can{% endif %} sign in.</p>
+  </section>
+  <section class="card">
     <div class="card-head"><h2>Integrations</h2></div>
     <dl>
       {% for system in systems %}<div class="kv"><dt>{% if system.url_name %}<a href="{% url system.url_name %}">{{ system.name }}</a>{% else %}{{ system.name }}{% endif %}</dt><dd{% if system.ok %} class="ok"{% endif %}>{{ system.state }}</dd></div>

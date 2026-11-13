@@ -131,3 +131,67 @@ class AppearanceTests(TestCase):
 
     def test_get_is_not_allowed(self):
         self.assertEqual(self.client.get(reverse("appearance")).status_code, 405)
+
+
+class UsersTests(TestCase):
+    PASSWORD = "lantern-orchard-91"
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("admin", password=self.PASSWORD)
+        self.tech = User.objects.create_user("tech", password=self.PASSWORD)
+        self.client.force_login(self.admin)
+
+    def add(self, **extra):
+        data = {"username": "newtech", "first_name": "Pat", "password1": self.PASSWORD,
+                "password2": self.PASSWORD, "is_active": "on", **extra}
+        return self.client.post(reverse("user-add"), data)
+
+    def test_users_is_administrators_only(self):
+        self.client.force_login(self.tech)
+        for url in (reverse("users"), reverse("user-add"), reverse("user-edit", args=[self.admin.pk])):
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+
+    def test_list_shows_everyone_with_their_role(self):
+        response = self.client.get(reverse("users"))
+        self.assertContains(response, "Administrator")
+        self.assertContains(response, "Technician")
+        self.assertContains(self.client.get(reverse("settings")), "2 people can sign in")
+
+    def test_add_a_technician_who_can_then_sign_in(self):
+        self.assertRedirects(self.add(), reverse("users"))
+        person = User.objects.get(username="newtech")
+        self.assertFalse(person.is_superuser or person.is_staff)
+        self.client.logout()
+        self.assertTrue(self.client.login(username="newtech", password=self.PASSWORD))
+
+    def test_new_user_needs_a_matching_strong_password(self):
+        self.assertContains(self.add(password1="", password2=""), "Set a password")
+        self.assertContains(self.add(password2="something-else-77"), "do not match")
+        self.assertContains(self.add(password1="12345678", password2="12345678"), "too common")
+        self.assertFalse(User.objects.filter(username="newtech").exists())
+
+    def test_edit_keeps_password_when_left_blank_and_can_turn_off(self):
+        url = reverse("user-edit", args=[self.tech.pk])
+        self.assertRedirects(self.client.post(url, {"username": "tech"}), reverse("users"))
+        self.tech.refresh_from_db()
+        self.assertFalse(self.tech.is_active)
+        self.assertTrue(self.tech.check_password(self.PASSWORD))
+
+    def test_reset_someone_elses_password(self):
+        url = reverse("user-edit", args=[self.tech.pk])
+        self.client.post(url, {"username": "tech", "is_active": "on", "password1": "harbor-violet-28", "password2": "harbor-violet-28"})
+        self.tech.refresh_from_db()
+        self.assertTrue(self.tech.check_password("harbor-violet-28"))
+
+    def test_cannot_lock_yourself_out(self):
+        url = reverse("user-edit", args=[self.admin.pk])
+        response = self.client.post(url, {"username": "admin", "is_active": "on"})
+        self.assertContains(response, "your own administrator access")
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_superuser)
+
+    def test_changing_your_own_password_keeps_you_signed_in(self):
+        url = reverse("user-edit", args=[self.admin.pk])
+        self.client.post(url, {"username": "admin", "is_active": "on", "is_superuser": "on",
+                               "password1": "harbor-violet-28", "password2": "harbor-violet-28"})
+        self.assertEqual(self.client.get(reverse("users")).status_code, 200)

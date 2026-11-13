@@ -8,7 +8,8 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
 ## Layout
 
 - `app/atlas/` project settings and root URLs (all routes live in `app/core/urls.py`)
-- `app/core/` sign-in shell, themes, Organization (single row), Reports, Settings, System, `/healthz/`
+- `app/core/` sign-in shell, themes, Organization (single row), Reports, Settings, Users
+  (Django's own User; superuser means Administrator), System, `/healthz/`
 - `app/devices/` Device 360 page, lookup service, open-lookup tabs, recent lookups, `LookupLog`
 - `app/integrations/` one config model per outside system (always row 1), encrypted tokens
   (`crypto.py`, key from `ATLAS_ENCRYPTION_KEY`), sidebar status (`status.py`)

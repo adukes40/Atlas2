@@ -1,0 +1,16 @@
+{% extends "core/base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / Users</p>
+  <h1>Users</h1>
+</div>
+<section class="card narrow">
+  <div class="card-head"><h2>People who can sign in</h2><a href="{% url 'user-add' %}">Add a user</a></div>
+  <dl>
+    {% for person in people %}<div class="kv"><dt><a href="{% url 'user-edit' person.pk %}">{{ person.get_username }}</a>{% if person.get_full_name %} <span class="muted">{{ person.get_full_name }}</span>{% endif %}</dt><dd>{% if not person.is_active %}<span class="chip">Turned off</span>{% elif person.is_superuser %}Administrator{% else %}Technician{% endif %}<br><span class="hint">{% if person.last_login %}Last signed in {{ person.last_login|date:"M j, Y" }}{% else %}Never signed in{% endif %}</span></dd></div>
+    {% endfor %}
+  </dl>
+  <p class="hint">Technicians can look up devices and see Reports. Administrators can also change Settings and manage users.</p>
+</section>
+{% endblock %}
