@@ -115,5 +115,17 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
+# Send warnings and errors, with their tracebacks, to the container's output
+# so they show up in `docker compose logs web`.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
+    "root": {"handlers": ["console"], "level": "WARNING"},
+    # Django logs every 403 and 404 as a warning; only real errors are worth keeping.
+    "loggers": {"django": {"handlers": ["console"], "level": "ERROR", "propagate": False}},
+}
+
 X_FRAME_OPTIONS = "DENY"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -49,10 +49,24 @@ def normalize_url(raw):
 
 
 class IncidentIQClient:
-    def __init__(self, base_url, token, session=None):
+    def __init__(self, base_url, token, site_id="", product_id="", session=None):
         self.base_url = base_url.rstrip("/")
         self._token = token
+        self._site_id = site_id
+        self._product_id = product_id
         self._session = session or requests.Session()
+
+    def _headers(self):
+        headers = {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
+        # Some Incident IQ sites answer with the token alone. Others also want
+        # to be told which site and product the call is for.
+        if self._site_id or self._product_id:
+            headers["Client"] = "ApiClient"
+            if self._site_id:
+                headers["SiteId"] = self._site_id
+            if self._product_id:
+                headers["ProductId"] = self._product_id
+        return headers
 
     def _request(self, method, path, **kwargs):
         host = urlsplit(self.base_url).hostname
@@ -60,7 +74,7 @@ class IncidentIQClient:
             response = self._session.request(
                 method,
                 f"{self.base_url}{API}{path}",
-                headers={"Authorization": f"Bearer {self._token}", "Accept": "application/json"},
+                headers=self._headers(),
                 timeout=TIMEOUT,
                 **kwargs,
             )
@@ -68,6 +82,10 @@ class IncidentIQClient:
             raise Unreachable(f"Incident IQ at {host} took too long to answer.") from None
         except requests.RequestException:
             raise Unreachable(f"Could not reach Incident IQ at {host}.") from None
+        except (UnicodeError, ValueError):
+            raise BadResponse(
+                "The token or IDs contain characters that cannot be sent. Paste them again."
+            ) from None
 
         if response.status_code in (401, 403):
             raise AuthFailed("Incident IQ rejected the API token.")
@@ -75,6 +93,11 @@ class IncidentIQClient:
             raise RateLimited("Incident IQ is limiting requests right now. Try again in a minute.")
         if response.status_code == 404:
             raise BadResponse("Incident IQ did not recognize the request (HTTP 404). Check the site address.")
+        if response.status_code >= 500:
+            raise BadResponse(
+                f"Incident IQ had an internal error (HTTP {response.status_code}). "
+                "This often means it needs the Site ID and Product ID as well."
+            )
         if response.status_code != 200:
             raise BadResponse(f"Incident IQ answered with an error (HTTP {response.status_code}).")
         try:
@@ -90,7 +113,9 @@ class IncidentIQClient:
         data = self._request(
             "POST", "/assets", json={"OnlyShowDeleted": False, "Paging": {"PageSize": 1, "PageIndex": 0}}
         )
-        return (data.get("Paging") or {}).get("TotalRows", 0)
+        paging = data.get("Paging")
+        total = paging.get("TotalRows") if isinstance(paging, dict) else None
+        return total if isinstance(total, int) and total >= 0 else 0
 
     def find_assets(self, query):
         """Assets whose serial number or asset tag is exactly `query`.

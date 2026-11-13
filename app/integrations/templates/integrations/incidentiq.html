@@ -23,6 +23,17 @@
         {{ form.token.errors }}
         <p class="hint">{% if config.has_token %}A token is saved. Leave this empty to keep it, or paste a new one to replace it.{% else %}Create an API token in Incident IQ and paste it here.{% endif %}</p>
       </div>
+      <div class="field">
+        {{ form.site_id.label_tag }}
+        {{ form.site_id }}
+        {{ form.site_id.errors }}
+      </div>
+      <div class="field">
+        {{ form.product_id.label_tag }}
+        {{ form.product_id }}
+        {{ form.product_id.errors }}
+        <p class="hint">Some Incident IQ sites need the Site ID and Product ID, some work with the token alone. If your other tools use them, enter both.</p>
+      </div>
       <button class="btn" type="submit">Save and test</button>
     </form>
   </section>

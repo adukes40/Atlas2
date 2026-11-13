@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -8,6 +10,8 @@ from .forms import IncidentIQForm
 from .incidentiq.client import IncidentIQError
 from .models import IncidentIQConfig
 
+logger = logging.getLogger(__name__)
+
 
 @login_required
 def incidentiq_settings(request):
@@ -15,11 +19,15 @@ def incidentiq_settings(request):
         raise PermissionDenied
     config = IncidentIQConfig.load()
     form = IncidentIQForm(
-        request.POST or None, initial={"base_url": config.base_url}, has_token=config.has_token
+        request.POST or None,
+        initial={"base_url": config.base_url, "site_id": config.site_id, "product_id": config.product_id},
+        has_token=config.has_token,
     )
 
     if request.method == "POST" and form.is_valid():
         config.base_url = form.cleaned_data["base_url"]
+        config.site_id = form.cleaned_data["site_id"]
+        config.product_id = form.cleaned_data["product_id"]
         try:
             if form.cleaned_data["token"]:
                 config.set_token(form.cleaned_data["token"])
@@ -30,6 +38,12 @@ def incidentiq_settings(request):
         except IncidentIQError as error:
             config.record_error(str(error))
             messages.error(request, f"Saved, but the connection test failed. {error}")
+            return redirect("settings-incidentiq")
+        except Exception as error:  # noqa: BLE001 - never show a bare error page for a connection test
+            logger.exception("Incident IQ connection test failed unexpectedly")
+            problem = f"Atlas hit an unexpected problem ({type(error).__name__}). The details are in the server log."
+            config.record_error(problem)
+            messages.error(request, f"Saved, but the connection test failed. {problem}")
             return redirect("settings-incidentiq")
         else:
             config.record_ok()

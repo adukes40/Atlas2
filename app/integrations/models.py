@@ -11,6 +11,8 @@ class IncidentIQConfig(models.Model):
 
     base_url = models.CharField(max_length=200, blank=True)
     token_encrypted = models.TextField(blank=True)
+    site_id = models.CharField(max_length=64, blank=True)
+    product_id = models.CharField(max_length=64, blank=True)
     last_checked_at = models.DateTimeField(null=True, blank=True)
     last_ok_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=300, blank=True)
@@ -51,7 +53,7 @@ class IncidentIQConfig(models.Model):
         token = crypto.decrypt(self.token_encrypted)
         if not token:
             raise IncidentIQError("The saved Incident IQ token cannot be read. Enter it again in Settings.")
-        return IncidentIQClient(self.base_url, token)
+        return IncidentIQClient(self.base_url, token, site_id=self.site_id, product_id=self.product_id)
 
     def record_ok(self):
         now = timezone.now()

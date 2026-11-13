@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest import mock
 
 import requests
 from cryptography.fernet import Fernet
@@ -50,6 +51,26 @@ class ClientTests(SimpleTestCase):
         self.assertEqual(kwargs["headers"]["Authorization"], f"Bearer {TOKEN}")
         self.assertEqual(kwargs["json"]["Paging"]["PageSize"], 1)
         self.assertTrue(kwargs["timeout"])
+
+    def test_site_and_product_ids_are_sent_only_when_set(self):
+        with incident_iq(STANDARD) as fake:
+            self.client_().check()
+            IncidentIQClient(BASE, TOKEN, site_id="aaaa1111-site", product_id="bbbb2222-prod").check()
+        bare, full = fake.calls[0][2]["headers"], fake.calls[1][2]["headers"]
+        self.assertEqual(set(bare), {"Authorization", "Accept"})
+        self.assertEqual(
+            (full["SiteId"], full["ProductId"], full["Client"]), ("aaaa1111-site", "bbbb2222-prod", "ApiClient")
+        )
+
+    def test_an_odd_asset_count_is_not_a_crash(self):
+        for paging in (None, {}, {"TotalRows": None}, {"TotalRows": "lots"}, "nonsense"):
+            with incident_iq({"/assets": FakeResponse(data={"Paging": paging})}):
+                self.assertEqual(self.client_().check(), 0, paging)
+
+    def test_a_server_error_suggests_the_ids(self):
+        with incident_iq({"/assets": FakeResponse(status=500)}), self.assertRaises(BadResponse) as caught:
+            self.client_().check()
+        self.assertIn("Site ID and Product ID", str(caught.exception))
 
     def test_serial_is_tried_first_and_a_hit_stops_there(self):
         with incident_iq(STANDARD) as fake:
@@ -190,6 +211,29 @@ class SettingsPageTests(TestCase):
             self.save(token=TOKEN)
             self.save(base_url="https://example.incidentiq.com/")
         self.assertEqual(fake.calls[-1][2]["headers"]["Authorization"], f"Bearer {TOKEN}")
+
+    def test_site_and_product_ids_are_saved_and_used(self):
+        site, product = "7C7E0000-AAAA-4BBB-8CCC-000000000001", "88df0000-aaaa-4bbb-8ccc-000000000002"
+        with incident_iq(STANDARD) as fake:
+            page = self.save(token=TOKEN, site_id=site, product_id=product)
+        self.assertContains(page, "Connected.")
+        headers = fake.calls[-1][2]["headers"]
+        self.assertEqual((headers["SiteId"], headers["ProductId"]), (site.lower(), product))
+        self.assertContains(page, site.lower())
+
+    def test_an_id_that_is_not_an_id_is_refused(self):
+        page = self.save(token=TOKEN, site_id="abc\r\nX-Evil: 1")
+        self.assertContains(page, "does not look like an Incident IQ ID")
+        self.assertFalse(IncidentIQConfig.load().configured)
+
+    def test_an_unexpected_failure_is_reported_not_a_blank_error_page(self):
+        with mock.patch.object(IncidentIQClient, "check", side_effect=RuntimeError("boom")), self.assertLogs(
+            "integrations.views", level="ERROR"
+        ):
+            page = self.save(token=TOKEN)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Atlas hit an unexpected problem (RuntimeError).")
+        self.assertEqual(IncidentIQConfig.load().state, "Error")
 
     def test_a_token_is_required_the_first_time(self):
         page = self.save()
