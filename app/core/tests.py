@@ -105,23 +105,25 @@ class AppearanceTests(TestCase):
     def test_light_mode_is_remembered(self):
         response = self.client.post(reverse("appearance"), {"mode": "light", "next": "/reports/"})
         self.assertRedirects(response, "/reports/")
-        self.assertContains(self.client.get(reverse("reports")), 'data-mode="light"')
+        page = self.client.get(reverse("reports"))
+        self.assertContains(page, 'data-mode="light"')
+        self.assertContains(page, 'name="mode" value="dark"')  # the one button now offers dark
 
     def test_auto_overrides_the_theme_default_and_follows_the_device(self):
         self.client.post(reverse("appearance"), {"mode": "auto"})
         page = self.client.get(reverse("reports"))
         self.assertNotContains(page, "data-mode=")
-        self.assertContains(page, 'value="auto" aria-pressed="true"')
+        self.assertContains(page, 'value="dark" data-auto="1"')  # atlas.js offers light on a dark device
 
     def test_unknown_mode_is_ignored(self):
         self.client.post(reverse("appearance"), {"mode": "<script>"})
         self.assertNotIn("atlas_mode", self.client.cookies)
         self.assertContains(self.client.get(reverse("reports")), 'data-mode="dark"')
 
-    def test_the_pressed_button_matches_what_is_shown(self):
+    def test_the_button_offers_the_other_mode(self):
         page = self.client.get(reverse("reports"))
-        self.assertContains(page, 'value="dark" aria-pressed="true"')
-        self.assertContains(page, 'value="light" aria-pressed="false"')
+        self.assertContains(page, 'data-mode="dark"')
+        self.assertContains(page, 'name="mode" value="light" data-auto=""')  # one button: switch to light
 
     def test_cannot_redirect_off_site(self):
         response = self.client.post(

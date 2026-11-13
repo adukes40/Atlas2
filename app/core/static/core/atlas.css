@@ -49,9 +49,9 @@ textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--ink2); borde
 .check input { width: 20px; height: 20px; margin: 0; }
 .btn { height: 44px; padding: 0 24px; border: 0; border-radius: var(--radius); background: var(--btn); color: var(--btn-ink); font: inherit; font-weight: 700; cursor: pointer; }
 .errorlist { list-style: none; margin: 4px 0 0; padding: 0; color: var(--warn); font-size: 13px; font-weight: 700; }
-.mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.mode button { border: 0; background: none; color: var(--ink2); font: inherit; font-size: 14px; padding: 0 14px; min-height: 44px; cursor: pointer; }
-.mode button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); font-weight: 700; }
+.mode button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--radius); background: none; color: var(--ink); cursor: pointer; }
+.mode button:hover { border-color: var(--focus); color: var(--focus); }
+.mode button[value="dark"] .go-light, .mode button[value="light"] .go-dark { display: none; }
 
 /* Cards */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 24px; }
