@@ -38,20 +38,7 @@ def asset(**changes):
             "Homeroom": "B214",
             "LocationId": SCHOOL_ID,
         },
-        "CustomFieldValues": [
-            {"CustomFieldTypeId": "other", "Value": "Blue case"},
-            {
-                "CustomFieldTypeId": "fees",
-                "Value": json.dumps(
-                    [
-                        {"Amount": 25, "Balance": 25, "PastDueAmount": 10, "LastActivityDate": "2026-10-01"},
-                        # The fee app lists the same charge twice; it counts once.
-                        {"Amount": 25, "Balance": 25, "PastDueAmount": 10, "LastActivityDate": "2026-10-01"},
-                        {"Amount": 40, "Balance": 0, "PastDueAmount": 0, "LastActivityDate": "2026-09-01"},
-                    ]
-                ),
-            },
-        ],
+        "CustomFieldValues": [{"CustomFieldTypeId": "other", "Value": "Blue case"}],
     }
     raw.update(changes)
     return raw
@@ -125,6 +112,29 @@ STANDARD["/tickets?$s=50"] = items(
     {"TicketNumber": "5999", "Subject": "Someone else's", "IsClosed": False, "Assets": [{"AssetId": "a-77"}]},
 )
 STANDARD["/assets/serial/7XK2RT3"] = items(asset())
+# Fees live on the person, in the Fee Tracker's custom field.
+STANDARD["/users/u-1"] = FakeResponse(
+    data={
+        "Item": {
+            "UserId": "u-1",
+            "CustomFieldValues": [
+                {"CustomFieldTypeId": "other", "Value": "Bus 12"},
+                {
+                    "CustomFieldTypeId": "fees",
+                    "Value": json.dumps(
+                        [
+                            {"Amount": 25, "Balance": 25, "PastDueAmount": 10, "LastActivityDate": "2026-10-01"},
+                            # The fee app lists the same charge twice; it counts once.
+                            {"Amount": 25, "Balance": 25, "PastDueAmount": 10, "LastActivityDate": "2026-10-01"},
+                            {"Amount": 40, "Balance": 0, "PastDueAmount": 0, "LastActivityDate": "2026-09-01"},
+                        ]
+                    ),
+                },
+            ],
+        }
+    }
+)
+NO_FEES = FakeResponse(data={"Item": {"UserId": "u-1", "CustomFieldValues": []}})
 
 
 # Google, Mist and Meraki. Made-up keys, IDs and addresses.

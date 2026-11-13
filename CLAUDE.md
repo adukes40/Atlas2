@@ -20,7 +20,8 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   (`IntegrationError`), `network.py` (`Sighting`, MAC helper) and the abstract
   `Connection` model. `devices/service.py` asks Google by serial, then Mist and
   Meraki by Google's MACs. Incident IQ open tickets are found by the assigned
-  person (the asset's own count is always 0). `LookupResult.conflicts` holds the Incident IQ vs Google checks.
+  person (the asset's own count is always 0), and so are fees (the person's
+  Fee Tracker field via `/users/{id}`, never the asset's). `LookupResult.conflicts` holds the Incident IQ vs Google checks.
   `_add_connection` follows Meraki's switch record to the switch port (Connection card).
 
 ## Conventions

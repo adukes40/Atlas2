@@ -1,3 +1,5 @@
+import json
+
 import requests
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -15,6 +17,7 @@ from integrations.testing import (
     MERAKI_ORG,
     MIST_API,
     MIST_ORG,
+    NO_FEES,
     SCHOOL_ID,
     STANDARD,
     STANDARD_OTHERS,
@@ -75,6 +78,40 @@ class LookupTests(TestCase):
         self.assertNotContains(page, "Old ticket")
         self.assertNotContains(page, "Someone else&#x27;s")
 
+    def test_fees_come_from_the_assigned_person_when_they_have_a_record(self):
+        routes = dict(STANDARD)
+        charges = [{"Amount": 55, "Balance": 55, "PastDueAmount": 0, "LastActivityDate": "2026-11-01", "Description": "Screen"}]
+        routes["/users/u-1"] = FakeResponse(
+            data={"Item": {"UserId": "u-1", "CustomFieldValues": [{"Value": json.dumps(charges)}]}}
+        )
+        page, _ = self.look_up("104482", routes)
+        self.assertContains(page, "$55.00")
+        self.assertContains(page, "Owed by Jordan Sample")
+        self.assertContains(page, "Fees owed by Jordan Sample")
+        self.assertContains(page, "Screen")
+        self.assertNotContains(page, "$25.00")
+
+    def test_fees_on_the_device_itself_are_ignored(self):
+        charges = [{"Amount": 99, "Balance": 99, "LastActivityDate": "2026-11-01"}]
+        routes = dict(STANDARD)
+        routes["/assets/assettag/104482"] = items(asset(CustomFieldValues=[{"Value": json.dumps(charges)}]))
+        routes["/users/u-1"] = NO_FEES
+        page, _ = self.look_up("104482", routes)
+        self.assertContains(page, "Nothing owed")
+        self.assertNotContains(page, "$99.00")
+
+    def test_fees_are_not_asked_for_on_an_unassigned_device(self):
+        page, fake = self.look_up("104482", {"/assets/assettag/104482": items(asset(Owner=None))})
+        self.assertContains(page, "Nothing owed")
+        self.assertNotIn("/users/u-1", fake.paths())
+
+    def test_fees_that_do_not_load_show_nothing_owed(self):
+        routes = dict(STANDARD)
+        routes["/users/u-1"] = FakeResponse(status=500)
+        page, _ = self.look_up("104482", routes)
+        self.assertContains(page, "Nothing owed")
+        self.assertContains(page, "Jordan Sample")
+
     def test_tickets_that_do_not_load_leave_the_count(self):
         routes = dict(STANDARD)
         routes["/tickets?$s=50"] = FakeResponse(status=500)
@@ -101,7 +138,7 @@ class LookupTests(TestCase):
 
     def test_nothing_owed_and_no_tickets_are_not_flagged(self):
         clean = asset(OpenTickets=0, CustomFieldValues=[])
-        page, _ = self.look_up("104482", {"/assets/assettag/104482": items(clean)})
+        page, _ = self.look_up("104482", {"/assets/assettag/104482": items(clean), "/users/u-1": NO_FEES})
         self.assertContains(page, "Nothing owed")
         self.assertContains(page, "None open")
         self.assertNotContains(page, 'class="cell at"')

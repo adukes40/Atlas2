@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from integrations.errors import IntegrationError
 from integrations.google.normalize import Chromebook, normalize_chromebook
 from integrations.incidentiq.client import IncidentIQError
-from integrations.incidentiq.normalize import Device, normalize_asset, normalize_ticket
+from integrations.incidentiq.normalize import Device, normalize_asset, normalize_ticket, normalize_user_fees
 from integrations.meraki import normalize as meraki_normalize
 from integrations.mist import normalize as mist_normalize
 from integrations.models import GoogleConfig, IncidentIQConfig, IncidentIQLocation, MerakiConfig, MistConfig
@@ -125,12 +125,24 @@ def lookup(query):
     config.record_ok()
     result = LookupResult(query, FOUND if devices else NOT_FOUND, devices=devices, iiq_url=client.base_url)
     if result.device:
+        _add_owner_fees(client, result.device)
         _add_tickets(client, result.device, result)
         _add_google(result)
         _add_network(result)
         _add_connection(result)
     result.took_ms = int((time.monotonic() - started) * 1000)
     return result
+
+
+def _add_owner_fees(client, device):
+    """Fees belong to the person who has the device, never the device itself.
+    No person, no fee record, or no answer from Incident IQ: nothing shown as owed."""
+    if not device.owner or not device.owner.user_id:
+        return
+    try:
+        device.fees = normalize_user_fees(client.user(device.owner.user_id)) or device.fees
+    except IncidentIQError:
+        pass
 
 
 def _add_tickets(client, device, result):

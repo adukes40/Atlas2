@@ -16,7 +16,7 @@ from .incidentiq.client import (
     Unreachable,
     normalize_url,
 )
-from .incidentiq.normalize import normalize_asset
+from .incidentiq.normalize import normalize_asset, normalize_user_fees
 from .models import IncidentIQConfig
 from .testing import BASE, STANDARD, TEST_KEY, TOKEN, FakeResponse, asset, incident_iq, items
 
@@ -125,7 +125,7 @@ class NormalizeTests(SimpleTestCase):
         self.assertEqual(device.label, "Jordan Sample")
 
     def test_the_same_charge_listed_twice_counts_once(self):
-        fees = normalize_asset(asset()).fees
+        fees = normalize_user_fees(STANDARD["/users/u-1"].json())
         self.assertEqual(fees.balance, Decimal("25"))
         self.assertEqual(fees.past_due, Decimal("10"))
         self.assertEqual(fees.balance_display, "$25.00")
@@ -133,8 +133,11 @@ class NormalizeTests(SimpleTestCase):
 
     def test_no_fee_field_means_nothing_owed(self):
         for values in (None, [], [{"Value": "Balance due soon"}], [{"Value": '{"Balance": 5}'}], [{"Value": 7}]):
-            fees = normalize_asset(asset(CustomFieldValues=values)).fees
-            self.assertFalse(fees.owed, values)
+            self.assertIsNone(normalize_user_fees({"Item": {"CustomFieldValues": values}}), values)
+
+    def test_fees_on_the_asset_are_not_read(self):
+        values = [{"Value": '[{"Balance": 5}]'}]
+        self.assertFalse(normalize_asset(asset(CustomFieldValues=values)).fees.owed)
 
     def test_an_unassigned_device(self):
         for owner in (None, {}, {"UserId": "00000000-0000-0000-0000-000000000000"}):

@@ -50,7 +50,7 @@
     <div class="cell off"><small><i></i>Google</small><b>Not found</b><span>No Chromebook with this serial</span></div>
     {% endif %}
     {% if device.fees.owed %}
-    <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed on this device{% endif %}</span></div>
+    <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed by {{ device.owner.name|default:"the assigned person" }}{% endif %}</span></div>
     {% else %}
     <div class="cell"><small><i></i>Balance</small><b>$0.00</b><span>Nothing owed</span></div>
     {% endif %}
@@ -176,7 +176,7 @@
   {% endif %}
   {% if device.fees.owed %}
   <section class="card">
-    <div class="card-head"><h2>Fees owed</h2><span class="src">Fee Tracker</span></div>
+    <div class="card-head"><h2>Fees owed by {{ device.owner.name|default:"the assigned person" }}</h2><span class="src">Fee Tracker</span></div>
     <dl>
       {% for charge in device.fees.charges %}
       <div class="kv"><dt>{{ charge.label }}{% if charge.date %} <span class="muted">· {{ charge.date }}</span>{% endif %}</dt><dd>{{ charge.balance_display }}{% if charge.past_due %} <span class="warn">({{ charge.past_due_display }} past due)</span>{% endif %}</dd></div>
