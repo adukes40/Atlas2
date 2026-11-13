@@ -106,8 +106,8 @@ LABEL_KEYS = ("Description", "Name", "FeeName", "FeeType", "Title", "Reason")
 
 
 def _fees(raw):
-    """Fees are not a normal Incident IQ field. The fee app stores them on the
-    asset as a custom field whose value is a JSON list of charges, each with a
+    """Fees, or None if there is no Fee Tracker field. They are not a normal
+    Incident IQ field: the fee app stores them on the person as a custom field whose value is a JSON list of charges, each with a
     Balance. Find that field by its shape, so no district-specific ID is needed.
     The same charge can be listed twice; count it once."""
     for custom in raw.get("CustomFieldValues") or []:
@@ -145,7 +145,7 @@ def _fees(raw):
                 )
             )
         return fees
-    return Fees()
+    return None
 
 
 def normalize_asset(raw):
@@ -183,7 +183,6 @@ def normalize_asset(raw):
         location=_text(location.get("Name")),
         open_tickets=open_tickets,
         owner=person,
-        fees=_fees(raw),
     )
 
 
@@ -195,3 +194,9 @@ def normalize_ticket(raw):
         status=_text((raw.get("WorkflowStep") or {}).get("StepName")),
         opened=_text(raw.get("CreatedDate"))[:10],
     )
+
+
+def normalize_user_fees(raw):
+    """The Fee Tracker charges on one person, or None if they have no fee record."""
+    user = raw.get("Item") if isinstance(raw.get("Item"), dict) else raw
+    return _fees(user)

@@ -59,6 +59,13 @@ Last updated 2026-11-13.
     storage, chosen when DJANGO_DEBUG is off), so a deploy's new CSS is never
     hidden by a browser's cached copy. Debug and tests use plain names.
 
+11. Fees come only from the assigned person (2026-11-13, Austin: "do not
+    fall back.. only pull from owner"). Atlas calls `GET /users/{UserId}` and
+    reads the Fee Tracker custom field there; the asset's own custom fields
+    are ignored. No person, no fee record, or an Incident IQ error shows
+    Nothing owed. The response shape (`{"Item": {...}}` or the bare user) is
+    not yet checked against live Incident IQ. 118 tests.
+
 ## How the three new connections work
 
 - Google: service account JSON key (stored encrypted) plus an admin email to
@@ -87,6 +94,8 @@ Last updated 2026-11-13.
 - Fee Tracker charge names: the field holding a charge's name is not known,
   so Atlas tries Description, Name, FeeName, FeeType, Title, Reason, else
   shows "Charge".
+- Fees read from `GET /users/{id}`: untested live; both `{"Item": user}`
+  and a bare user are accepted.
 
 - Google, Mist and Meraki against the real systems. Field names were checked
   against live Google and Mist answers on 2026-11-13; Meraki's client search

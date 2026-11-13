@@ -139,6 +139,9 @@ class IncidentIQClient:
         data = self._request("GET", f"/locations/{quote(location_id, safe='')}")
         return (data.get("Location") or {}).get("Name") or None
 
+    def user(self, user_id):
+        return self._request("GET", f"/users/{quote(user_id, safe='')}")
+
     def open_tickets(self, asset_id, user_id):
         """Open tickets on one asset (at most 50 of its person's tickets are read).
 
