@@ -88,7 +88,7 @@ def others(google=None, mist=None):
         ),
         f"{MIST_API}/orgs/{MIST_ORG}/clients/search": mist or FakeResponse(data={"results": [
             {"mac": WIFI_MAC, "site_id": MIST_SITE, "last_ssid": "CR-Students", "last_psk_name": "Staff PSK",
-             "last_vlan": 355, "timestamp": datetime.now().timestamp() - 600},
+             "last_vlan": 120, "timestamp": datetime.now().timestamp() - 600},
             {"mac": "ffffffffffff", "site_id": MIST_SITE, "timestamp": datetime.now().timestamp()},  # not a Chromebook
         ]}),
         f"{MIST_API}/sites/{MIST_SITE}": FakeResponse(data={"name": "North Middle School"}),
@@ -396,7 +396,7 @@ def gear_routes(meraki=None):
         f"{ORG}/switch/ports/bySwitch": FakeResponse(data=[{**SWITCH, "ports": [
             {**port, "portId": "1"},
             {**port, "portId": "2"},
-            {**port, "portId": "20", "type": "trunk", "vlan": 1, "allowedVlans": "1,255,355"},
+            {**port, "portId": "20", "type": "trunk", "vlan": 1, "allowedVlans": "1,255,120"},
             {**port, "portId": "21", "enabled": False},
         ]}]),
         f"{ORG}/switch/ports/statuses/bySwitch": FakeResponse(data={"items": [{**SWITCH, "ports": [
@@ -419,12 +419,12 @@ def gear_routes(meraki=None):
              "lldp_stat": {"system_name": "core-3850", "port_id": "Gi1/0/4"}},
         ]),
         f"{MIST_API}/orgs/{MIST_ORG}/wlans": FakeResponse(data=[
-            {"ssid": "CR-PSK", "enabled": True, "auth": {"type": "psk", "multi_psk_only": True}, "vlan_id": 355,
+            {"ssid": "Staff-Keys", "enabled": True, "auth": {"type": "psk", "multi_psk_only": True}, "vlan_id": 120,
              "bands": ["24", "5"], "site_id": "00000000-0000-0000-0000-000000000000"},
             {"ssid": "CR-Old", "enabled": False, "auth": {"type": "eap"}, "bands": ["5"], "site_id": MIST_SITE},
         ]),
         f"{MIST_API}/orgs/{MIST_ORG}/psks": FakeResponse(data=[
-            {"name": "teacher@example.org", "ssid": "CR-PSK", "role": "StaffBYOD", "vlan_id": 355,
+            {"name": "teacher@example.org", "ssid": "Staff-Keys", "role": "Staff", "vlan_id": 120,
              "passphrase": "do-not-copy-this", "expire_time": 0},
         ]),
     }
@@ -472,11 +472,11 @@ class NetworkGearTests(TestCase):
         other = NetDevice.objects.get(mac="7cb68d000009")
         self.assertEqual((other.uplink_switch, other.uplink_port, other.port_mode, other.status), ("core-3850", "Gi1/0/4", "", "Offline"))
 
-        psk = Wlan.objects.get(ssid="CR-PSK")
-        self.assertEqual((psk.security, psk.vlan, psk.bands, psk.scope, psk.psks), ("Personal keys", "355", "2.4, 5 GHz", "Whole district", 1))
+        psk = Wlan.objects.get(ssid="Staff-Keys")
+        self.assertEqual((psk.security, psk.vlan, psk.bands, psk.scope, psk.psks), ("Personal keys", "120", "2.4, 5 GHz", "Whole district", 1))
         self.assertEqual(Wlan.objects.get(ssid="CR-Old").scope, "North Middle School")
         key = Psk.objects.get()
-        self.assertEqual((key.name, key.role, key.expires), ("teacher@example.org", "StaffBYOD", None))
+        self.assertEqual((key.name, key.role, key.expires), ("teacher@example.org", "Staff", None))
         self.assertNotIn("do-not-copy-this", json.dumps(list(Psk.objects.values()), default=str))
 
     def test_meraki_alone_asks_nothing_else(self):

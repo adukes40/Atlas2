@@ -368,7 +368,7 @@ class GoogleAndNetworkTests(TestCase):
         search = f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search"
         page = self.look_up(dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{search: MERAKI_ON_SWITCH}))
         for expected in [
-            "Mist policy: Chromebooks - Student",
+            "Mist policy: Student devices",
             "Meraki policy: Students",
             "North-IDF-5, port 38",
             "The access point's uplink",
@@ -386,7 +386,7 @@ class GoogleAndNetworkTests(TestCase):
         page = self.look_up(dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{search: MERAKI_ON_SWITCH}))
         self.assertContains(page, "by Meraki, wired")
         self.assertContains(page, "The device's own port")
-        self.assertContains(page, "VLAN 355")
+        self.assertContains(page, "VLAN 120")
 
     def test_a_switch_lookup_problem_is_shown_on_the_connection_card(self):
         self.connect()

@@ -4,3 +4,11 @@ __pycache__/
 db.sqlite3
 app/staticfiles/
 .venv/
+# Keys and backups that must never be committed
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+*.sql
+*.dump

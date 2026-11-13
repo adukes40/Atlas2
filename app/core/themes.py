@@ -9,11 +9,6 @@ DEFAULT_THEME = "graphite"
 THEMES = {
     "graphite": {"label": "Graphite", "css": "core/themes/graphite.css", "mode": "dark"},
     "slate": {"label": "Slate", "css": "core/themes/slate.css", "mode": "auto"},
-    "caesar-rodney": {
-        "label": "Caesar Rodney School District",
-        "css": "core/themes/caesar-rodney.css",
-        "mode": "auto",
-    },
 }
 
 

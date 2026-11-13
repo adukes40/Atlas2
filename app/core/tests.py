@@ -79,11 +79,11 @@ class ThemeTests(TestCase):
 
     def test_administrator_can_rename_and_retheme(self):
         response = self.client.post(
-            reverse("settings"), {"name": "Example District", "theme": "caesar-rodney"}
+            reverse("settings"), {"name": "Example District", "theme": "slate"}
         )
         self.assertRedirects(response, reverse("settings"))
         page = self.client.get(reverse("device360"))
-        self.assertContains(page, "core/themes/caesar-rodney.css")
+        self.assertContains(page, "core/themes/slate.css")
         self.assertNotContains(page, "core/themes/graphite.css")
         self.assertContains(page, "Example District")
         self.assertEqual(Organization.objects.count(), 1)
