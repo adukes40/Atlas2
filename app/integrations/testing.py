@@ -208,8 +208,8 @@ STANDARD_OTHERS = {
         data={
             "results": [
                 {"mac": WIFI_MAC, "site_id": MIST_SITE, "last_ap": MIST_AP, "last_ssid": "Students",
-                 "last_ip": "10.20.30.41", "timestamp": 1794580000.5, "last_vlan": 355,
-                 "last_psk_name": "Chromebooks - Student"},
+                 "last_ip": "10.20.30.41", "timestamp": 1794580000.5, "last_vlan": 120,
+                 "last_psk_name": "Student devices"},
             ]
         }
     ),
@@ -228,14 +228,14 @@ STANDARD_OTHERS = {
 }
 
 # Meraki lists a Wi-Fi client on the switch port its access point plugs into.
-MERAKI_SWITCH_MAC = "ac:17:c8:3f:56:28"
+MERAKI_SWITCH_MAC = "ac:17:c8:00:00:99"
 MERAKI_NETWORK = "N_1"
 MERAKI_ON_SWITCH = FakeResponse(
     data={
         "mac": "a1:b2:c3:d4:e5:f6",
-        "clientId": "k5cf75b",
+        "clientId": "k000001",
         "records": [
-            {"network": {"id": MERAKI_NETWORK, "name": "North-switch"}, "ssid": None, "vlan": "355",
+            {"network": {"id": MERAKI_NETWORK, "name": "North-switch"}, "ssid": None, "vlan": "120",
              "switchport": "38", "recentDeviceMac": MERAKI_SWITCH_MAC, "ip": "10.20.30.41",
              "lastSeen": "2026-11-13T18:00:00Z"},
         ],
@@ -248,7 +248,7 @@ MERAKI_SWITCH_ROUTES = {
     f"{MERAKI_API}/devices/Q2KW-0000-0001/switch/ports/38": FakeResponse(
         data={"portId": "38", "type": "trunk", "vlan": 71, "allowedVlans": "all", "voiceVlan": None, "poeEnabled": True}
     ),
-    f"{MERAKI_API}/networks/{MERAKI_NETWORK}/clients/k5cf75b/policy": FakeResponse(
+    f"{MERAKI_API}/networks/{MERAKI_NETWORK}/clients/k000001/policy": FakeResponse(
         data={"devicePolicy": "Group policy", "groupPolicyId": "102"}
     ),
     f"{MERAKI_API}/networks/{MERAKI_NETWORK}/groupPolicies": FakeResponse(data=[{"groupPolicyId": "102", "name": "Students"}]),
