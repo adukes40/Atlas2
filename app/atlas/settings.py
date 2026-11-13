@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "core",
     "integrations",
     "devices",
+    "reports",
 ]
 
 MIDDLEWARE = [
@@ -105,6 +106,9 @@ LOGOUT_REDIRECT_URL = "login"
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
+# The nightly sync for Reports runs at this hour in this time zone.
+ATLAS_TIME_ZONE = os.environ.get("ATLAS_TIME_ZONE", "America/New_York")
+ATLAS_SYNC_HOUR = int(os.environ.get("ATLAS_SYNC_HOUR", "2"))
 USE_I18N = False
 USE_TZ = True
 
@@ -130,7 +134,10 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
     "root": {"handlers": ["console"], "level": "WARNING"},
     # Django logs every 403 and 404 as a warning; only real errors are worth keeping.
-    "loggers": {"django": {"handlers": ["console"], "level": "ERROR", "propagate": False}},
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        "atlas.sync": {"level": "INFO"},  # what each nightly sync did, in `docker compose logs sync`
+    },
 }
 
 X_FRAME_OPTIONS = "DENY"

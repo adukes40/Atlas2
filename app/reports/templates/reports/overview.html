@@ -1,0 +1,19 @@
+{% extends "reports/layout.html" %}
+{% block report %}
+{% if not data_as_of %}
+<section class="card"><h2>No data yet</h2><p class="muted" style="margin-top:6px">Reports fill in after the first sync. Atlas syncs every night, or press Sync now; the first one takes several minutes.</p></section>
+{% endif %}
+{% for group, cards in tiles %}
+<h2 class="rep-group">{{ group }}</h2>
+<div class="tiles">
+  {% for t in cards %}
+  <a class="tile{% if forloop.parentloop.counter <= 3 %} hot{% endif %}" href="{% url 'report' t.report.slug %}">
+    <span class="t">{{ t.report.title }}</span>
+    <b>{% firstof t.count "—" %}</b>
+    {% if t.change %}<small>{{ t.change }} this week</small>{% endif %}
+    {% if t.bars|length > 1 %}<span class="spark" aria-hidden="true">{% for h in t.bars %}<i style="height:{{ h }}%"></i>{% endfor %}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

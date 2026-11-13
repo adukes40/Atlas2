@@ -10,7 +10,7 @@ import requests
 from django.core.cache import cache
 
 from ..errors import IntegrationError
-from ..http import get_json
+from ..http import TIMEOUT, get_json
 
 NAME_CACHE = 24 * 3600  # site and access point names rarely change
 
@@ -38,8 +38,12 @@ class MistClient:
         self.org_id = org_id
         self._token = token
         self._session = session or requests.Session()
+        self.timeout = TIMEOUT  # the nightly sync allows longer for big pages, and retries
+        self.retries = 0
 
     def _get(self, path, params=None):
+        if path.startswith("/api/v1/"):  # a "next" link from a search
+            path = path[len("/api/v1") :]
         return get_json(
             self._session,
             f"https://{self.host}/api/v1{path}",
@@ -48,6 +52,8 @@ class MistClient:
             rejected="Mist rejected the API token.",
             headers={"Authorization": f"Token {self._token}", "Accept": "application/json"},
             params=params,
+            timeout=self.timeout,
+            retries=self.retries,
         )
 
     def check(self):
@@ -77,6 +83,16 @@ class MistClient:
         )
         results = [r for r in (data or {}).get("results") or [] if isinstance(r, dict)]
         return max(results, key=lambda r: r.get("timestamp") or 0, default=None)
+
+    def clients_seen(self, duration="1d"):
+        """Every wireless client record in the organization for this long, a
+        thousand at a time, following Mist's "next" link."""
+        path = f"/orgs/{quote(self.org_id, safe='')}/clients/search"
+        params = {"duration": duration, "limit": 1000}
+        while path:
+            data = self._get(path, params) or {}
+            yield from (r for r in data.get("results") or [] if isinstance(r, dict))
+            path, params = data.get("next") or "", None
 
     def site_name(self, site_id):
         def fetch():

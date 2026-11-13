@@ -1,5 +1,5 @@
 from django.contrib.auth import views as auth_views
-from django.urls import path
+from django.urls import include, path
 
 from devices import views as device_views
 from integrations import views as integration_views
@@ -9,7 +9,7 @@ from . import views
 urlpatterns = [
     path("", device_views.device360, name="device360"),
     path("lookups/close/", device_views.close_lookup, name="close-lookup"),
-    path("reports/", views.reports, name="reports"),
+    path("", include("reports.urls")),
     path("settings/", views.settings_page, name="settings"),
     path("settings/users/", views.users, name="users"),
     path("settings/users/add/", views.user_edit, name="user-add"),

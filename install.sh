@@ -384,6 +384,7 @@ finish() {
 
 To update later:   cd $ATLAS_DIR && git pull && sudo ./install.sh
 To see the logs:   sudo docker compose logs -f web
+Reports sync log:  sudo docker compose logs -f sync
 To stop Atlas:     sudo docker compose down     (your data is kept)
 
 Atlas is served over plain HTTP. Keep it on a trusted network until HTTPS
