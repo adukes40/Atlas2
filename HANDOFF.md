@@ -55,6 +55,10 @@ Last updated 2026-11-13.
    calls when a switch record exists. Notes in the network card now have a
    tinted background (`.note`). All switches are Meraki; APs are Mist. 113 tests.
 
+10. Static files get hashed names in production (WhiteNoise manifest
+    storage, chosen when DJANGO_DEBUG is off), so a deploy's new CSS is never
+    hidden by a browser's cached copy. Debug and tests use plain names.
+
 ## How the three new connections work
 
 - Google: service account JSON key (stored encrypted) plus an admin email to
