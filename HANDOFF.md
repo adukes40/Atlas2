@@ -119,7 +119,17 @@ Last updated 2026-11-13 (Reports).
       retiring); filter Vendor to drop them.
     - Filter chips open for editing: click one to change its operation or
       value in place (`replace` on the add-filter request), no remove and re-add.
-      "Never on our network" was dropped (Austin, same day). 142 tests.
+      "Never on our network" was dropped (Austin, same day).
+    - Each platform syncs on its own (Austin: "should not need to run full
+      scans on everything just to update one platform"). Sync now, on Reports
+      and System, opens a menu: tick Google, Incident IQ, Mist or Meraki, or
+      Sync everything. `SyncRun.systems` holds the choice (blank is all, as
+      the nightly run is). A platform not asked for is rebuilt from the copy
+      as it stands (`sync.KEEP`, `_iiq_from_copy`, `_google_from_copy`), so a
+      Google-only run makes no Incident IQ calls and keeps assignments. A
+      second request joins one still waiting. "Data as of" is now the oldest
+      platform's copy (`sync.as_of()`), and the menu shows each one's time.
+      145 tests.
 
 ## How the three new connections work
 

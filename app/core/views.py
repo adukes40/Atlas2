@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST
 from .context import MODE_COOKIE, MODES
 from .forms import OrganizationForm, UserForm
 from reports.models import SyncRun
+from reports.views import platform_times as reports_platforms
 
 from .models import Organization
 
@@ -82,6 +83,7 @@ def system(request):
             "now": timezone.now(),
             "sync_runs": SyncRun.objects.all()[:5],
             "sync_tz": settings.ATLAS_TIME_ZONE,
+            "platforms": reports_platforms(),
         },
     )
 

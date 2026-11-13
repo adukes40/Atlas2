@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
 from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
-from .sync import request_sync, sync_zone
+from .sync import PLATFORMS, as_of, request_sync, sync_zone
 
 PAGE_SIZE = 100
 
@@ -30,20 +30,32 @@ def _counts():
     return latest
 
 
+def _stamp(moment):
+    return moment.astimezone(sync_zone()).strftime("%b %-d, %-I:%M %p")
+
+
 def _n(number):
     return f"{number:,}" if number is not None else None
 
 
+def platform_times(when=None):
+    """Each platform with when its data was last copied, for the Sync now menu."""
+    when = as_of() if when is None else when
+    return [(p, _stamp(when[p]) if p in when else "never") for p in PLATFORMS]
+
+
 def _shared(request, current=""):
     counts = _counts()
-    last = SyncRun.last_good()
+    when = as_of()
     newest = SyncRun.objects.exclude(state=SyncRun.REQUESTED).first()
     return {
         "section": "reports",
         "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library()],
         "saved": SavedReport.objects.filter(user=request.user),
         "current": current,
-        "data_as_of": last.finished_at.astimezone(sync_zone()).strftime("%b %-d, %-I:%M %p") if last else None,
+        # The oldest platform's copy, so "as of" never claims fresher data than a report shows.
+        "data_as_of": _stamp(min(when.values())) if when else None,
+        "platforms": platform_times(when),
         "sync_problems": newest.problems if newest and newest.problems else {},
         "sync_waiting": SyncRun.objects.filter(state__in=[SyncRun.REQUESTED, SyncRun.RUNNING]).exists(),
     }
@@ -314,7 +326,13 @@ def delete_saved(request, pk):
 @login_required
 @require_POST
 def sync_now(request):
-    request_sync(request.user.get_username())
-    messages.success(request, "Sync queued. It usually takes a few minutes; reports update when it finishes.")
+    chosen = [] if request.POST.get("everything") else [p for p in request.POST.getlist("platform") if p in PLATFORMS]
     target = request.POST.get("next", "")
-    return redirect(target if target.startswith("/") and not target.startswith("//") else "reports")
+    target = target if target.startswith("/") and not target.startswith("//") else "reports"
+    if not chosen and not request.POST.get("everything"):
+        messages.error(request, "Tick at least one system to sync, or choose Sync everything.")
+        return redirect(target)
+    request_sync(request.user.get_username(), chosen)
+    what = " and ".join(chosen) if chosen else "Everything"
+    messages.success(request, f"{what} queued to sync. It usually takes a few minutes; reports update when it finishes.")
+    return redirect(target)

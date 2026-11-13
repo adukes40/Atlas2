@@ -1,0 +1,10 @@
+<details class="pop"><summary class="btn quiet sm">Sync now</summary>
+  <form method="post" action="{% url 'sync-now' %}" class="pop-body">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    <fieldset><legend>Sync only what changed</legend>
+    {% for name, when in platforms %}<label class="tick"><input type="checkbox" name="platform" value="{{ name }}"> {{ name }} <small>last {{ when }}</small></label>{% endfor %}
+    </fieldset>
+    <button class="btn sm" type="submit">Sync selected</button>
+    <button class="btn quiet sm" type="submit" name="everything" value="1">Sync everything</button>
+  </form>
+</details>

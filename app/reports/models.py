@@ -14,6 +14,7 @@ class SyncRun(models.Model):
 
     state = models.CharField(max_length=10, default=REQUESTED)
     requested_by = models.CharField(max_length=150, blank=True)  # blank: the nightly schedule
+    systems = models.CharField(max_length=100, blank=True)  # comma-separated platforms; blank: all of them
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -23,10 +24,9 @@ class SyncRun(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    @classmethod
-    def last_good(cls):
-        """The latest run that rebuilt the report data."""
-        return cls.objects.filter(state=cls.DONE).exclude(finished_at=None).first()
+    @property
+    def platforms(self):
+        return [p for p in self.systems.split(",") if p]
 
     @property
     def problems(self):

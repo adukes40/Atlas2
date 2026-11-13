@@ -15,7 +15,8 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   service via `manage.py run_sync_schedule`), every report and filter field in
   `catalog.py`, `Device`/`Person` rebuilt whole each sync, `Sighting` kept;
   network gear (`NetDevice`, `SwitchPort`, `Wlan`, `Psk`) replaced per vendor,
-  APs joined to switch ports by `link_gear()`, switch faceplate page in `views.switch`
+  APs joined to switch ports by `link_gear()`, switch faceplate page in `views.switch`;
+  a run can cover only some platforms (`SyncRun.systems`, `sync.PLATFORMS`), the rest rebuilt from the copy
 - `app/integrations/` one config model per outside system (always row 1), encrypted tokens
   (`crypto.py`, key from `ATLAS_ENCRYPTION_KEY`), sidebar status (`status.py`)
 - `app/integrations/incidentiq/` `client.py` is the only code that talks to Incident IQ;

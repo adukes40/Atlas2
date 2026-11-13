@@ -35,12 +35,46 @@ PAGE = 500  # Incident IQ rows per request
 MAX_PAGES = 400  # 200,000 rows: far past any district, and a stop if paging misbehaves
 SYNC_TIMEOUT = 60  # seconds per request; pages are large
 SYNC_RETRIES = 3
+KEEP = object()  # a platform not synced this time: rebuild from what the copy has
 
 
-def request_sync(who):
-    """Queue a sync unless one is already queued or running. Returns the run."""
-    waiting = SyncRun.objects.filter(state__in=[SyncRun.REQUESTED, SyncRun.RUNNING]).first()
-    return waiting or SyncRun.objects.create(requested_by=who)
+PLATFORMS = {  # each platform and the sync steps it runs
+    "Google": ("Google",),
+    "Incident IQ": ("Incident IQ",),
+    "Mist": ("Mist", "Mist access points"),
+    "Meraki": ("Meraki",),
+}
+
+
+def request_sync(who, platforms=()):
+    """Queue a sync of these platforms (all when none are named). A sync
+    already waiting to start takes them on instead. Returns the run."""
+    platforms = [p for p in platforms if p in PLATFORMS]
+    waiting = SyncRun.objects.filter(state=SyncRun.REQUESTED).first()
+    if waiting:
+        if waiting.systems and platforms:
+            waiting.systems = ",".join(p for p in PLATFORMS if p in waiting.platforms or p in platforms)
+        else:
+            waiting.systems = ""  # one of them asked for everything
+        waiting.save()
+        return waiting
+    return SyncRun.objects.create(requested_by=who, systems=",".join(platforms))
+
+
+def as_of():
+    """When each platform's data in the reports was last copied: {"Google": datetime}."""
+    found = {}
+    for run in SyncRun.objects.exclude(finished_at=None).order_by("-finished_at")[:200]:
+        for platform, steps in PLATFORMS.items():
+            first = run.results.get(steps[0], {})
+            if platform in found or not first.get("ok") or first.get("detail", "").startswith("Not connected"):
+                continue
+            if platform in ("Google", "Incident IQ") and not run.results.get("Atlas", {}).get("ok"):
+                continue  # fetched, but the copy was not rebuilt with it
+            found[platform] = run.finished_at
+        if len(found) == len(PLATFORMS):
+            break
+    return found
 
 
 def run_pending():
@@ -56,8 +90,8 @@ def execute(run):
     run.state, run.started_at = SyncRun.RUNNING, timezone.now()
     run.save()
     try:
-        run.results, rebuilt = collect_and_rebuild()
-        run.state = SyncRun.DONE if rebuilt else SyncRun.FAILED
+        run.results, ok = collect_and_rebuild(run.platforms)
+        run.state = SyncRun.DONE if ok else SyncRun.FAILED
     except Exception:
         log.exception("Sync stopped")
         run.results = {**run.results, "Atlas": {"ok": False, "error": "The sync stopped on an unexpected error. The sync log has the details."}}
@@ -67,21 +101,32 @@ def execute(run):
     return run
 
 
-def collect_and_rebuild():
+def collect_and_rebuild(platforms=()):
+    """Sync these platforms (all when none are named). Platforms not asked for
+    keep what the copy already has. Returns (results, whether it went well)."""
+    want = set(platforms or PLATFORMS)
     results = {}
-    google = _step(results, "Google", GoogleConfig, _google)
-    iiq = _step(results, "Incident IQ", IncidentIQConfig, _incidentiq)
-    macs = set()
-    for raw in (google or {}).values():
-        macs.update(m for m in (mac_plain(raw.get(k)) for k in ("macAddress", "ethernetMacAddress")) if m)
-    _step(results, "Mist", MistConfig, lambda client: _mist(client, macs))
-    _step(results, "Meraki", MerakiConfig, _meraki_gear)
-    _step(results, "Mist access points", MistConfig, _mist_gear)
-    link_gear()
+    google = _step(results, "Google", GoogleConfig, _google) if "Google" in want else KEEP
+    iiq = _step(results, "Incident IQ", IncidentIQConfig, _incidentiq) if "Incident IQ" in want else KEEP
+    if "Mist" in want:
+        if isinstance(google, dict):
+            macs = {m for raw in google.values() for m in (mac_plain(raw.get(k)) for k in ("macAddress", "ethernetMacAddress")) if m}
+        else:
+            macs = {m for joined in Device.objects.values_list("macs", flat=True) for m in joined.split(",") if m}
+        _step(results, "Mist", MistConfig, lambda client: _mist(client, macs))
+        _step(results, "Mist access points", MistConfig, _mist_gear)
+    if "Meraki" in want:
+        _step(results, "Meraki", MerakiConfig, _meraki_gear)
+    if want & {"Mist", "Meraki"}:
+        link_gear()
+    gear_ok = all(results.get(step, {}).get("ok", True) for step in ("Meraki", "Mist access points"))
+    if not want & {"Google", "Incident IQ", "Mist"}:
+        record_counts()
+        return results, gear_ok
     if google is None or iiq is None:
         return results, False
     started = time.monotonic()
-    devices, people = rebuild(google, *iiq, google_on=GoogleConfig.load().configured)
+    devices, people = rebuild(google, *(iiq if iiq is not KEEP else (KEEP, KEEP)), google_on=GoogleConfig.load().configured)
     results["Atlas"] = {"ok": True, "detail": f"{devices:,} devices and {people:,} people ready for reports",
                         "seconds": round(time.monotonic() - started)}
     record_counts()
@@ -271,8 +316,41 @@ def _cut(value, field):
     return (value or "")[: Device._meta.get_field(field).max_length]
 
 
+IIQ_FIELDS = ["serial", "in_iiq", "iiq_asset_id", "asset_tag", "model", "category", "iiq_status", "iiq_location", "owner_id"]
+GOOGLE_FIELDS = ["in_google", "google_status", "org_unit", "last_sync", "recent_user", "google_model", "os_version",
+                 "updates_until", "google_asset_id", "macs"]
+PERSON_FIELDS = ["user_id", "name", "email", "school_id", "role", "grade", "school", "active", "fee_balance", "fee_past_due"]
+
+
 def rebuild(google, assets, people, google_on=True):
-    """Replace the report copy. Returns (devices, people) counts."""
+    """Replace the report copy. KEEP for google, or for assets and people,
+    takes that platform's part from the copy as it is. Returns (devices, people) counts."""
+    if assets is KEEP:
+        persons, devices = _iiq_from_copy()
+    else:
+        persons, devices = _iiq(assets, people)
+    if google is KEEP:
+        _google_from_copy(devices)
+    else:
+        _google_into(devices, google)
+    return _finish(devices, persons, google_on)
+
+
+def _iiq_from_copy():
+    persons = {p.user_id: Person(**{f: getattr(p, f) for f in PERSON_FIELDS}) for p in Person.objects.all()}
+    devices = {d.serial.upper(): Device(**{f: getattr(d, f) for f in IIQ_FIELDS})
+               for d in Device.objects.filter(in_iiq=True).only(*IIQ_FIELDS)}
+    return persons, devices
+
+
+def _google_from_copy(devices):
+    for d in Device.objects.filter(in_google=True).only("serial", *GOOGLE_FIELDS):
+        device = devices.setdefault(d.serial.upper(), Device(serial=d.serial))
+        for f in GOOGLE_FIELDS:
+            setattr(device, f, getattr(d, f))
+
+
+def _iiq(assets, people):
     persons = {}
     for raw in people:
         person, fees, active = normalize_user(raw)
@@ -302,7 +380,10 @@ def rebuild(google, assets, people, google_on=True):
             iiq_location=_cut(asset.location, "iiq_location"),
             owner_id=owner.user_id if owner and owner.user_id else None,
         )
+    return persons, devices
 
+
+def _google_into(devices, google):
     for serial, raw in google.items():
         book = normalize_chromebook(raw)
         device = devices.setdefault(serial, Device(serial=_cut(_text(raw.get("serialNumber")), "serial")))
@@ -317,6 +398,8 @@ def rebuild(google, assets, people, google_on=True):
         device.google_asset_id = _cut(book.asset_id, "google_asset_id")
         device.macs = _cut(",".join(book.macs), "macs")
 
+
+def _finish(devices, persons, google_on):
     newest = max((_major(d.os_version) or 0 for d in devices.values()), default=0)
     sightings = Sighting.objects.in_bulk(field_name="mac")
     for device in devices.values():

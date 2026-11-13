@@ -172,6 +172,35 @@ class SyncTests(TestCase):
         self.assertEqual(run.problems, {"Mist": "Mist rejected the API token."})
         self.assertEqual(Device.objects.get(serial="7XK2RT3").network_place, "North Middle School")
 
+    def test_one_platform_syncs_on_its_own_and_the_rest_comes_from_the_copy(self):
+        sync()
+        before = Device.objects.get(serial="7XK2RT3")
+        # Only Google: Incident IQ is not asked, and its assignments stay.
+        with incident_iq(IIQ_ROUTES, others=others(google=google_page(chromebook(osVersion="142.0.1")))) as fake:
+            run = execute(SyncRun.objects.create(systems="Google"))
+        self.assertEqual(run.state, SyncRun.DONE)
+        self.assertEqual(set(run.results), {"Google", "Atlas"})
+        self.assertFalse(fake.paths())  # no Incident IQ call
+        after = Device.objects.get(serial="7XK2RT3")
+        self.assertEqual((after.owner_id, after.asset_tag, after.os_version), (before.owner_id, before.asset_tag, "142.0.1"))
+        self.assertEqual(Person.objects.get(user_id="u-1").chromebooks, 1)
+        self.assertTrue(Device.objects.filter(serial="NOGOOGLE1", in_iiq=True).exists())
+        self.assertEqual(after.network_place, "North Middle School")  # Wi-Fi sightings kept
+        # Only Incident IQ: Google's fields stay.
+        with incident_iq(IIQ_ROUTES, others=others()) as fake:
+            run = execute(SyncRun.objects.create(systems="Incident IQ"))
+        self.assertEqual(set(run.results), {"Incident IQ", "Atlas"})
+        self.assertFalse(any("googleapis" in u for u in fake.urls()))
+        self.assertEqual(Device.objects.get(serial="7XK2RT3").os_version, "142.0.1")
+        # Only Mist: neither Google nor Incident IQ is asked, and the copy is rebuilt from itself.
+        with incident_iq(IIQ_ROUTES, others=others()) as fake:
+            run = execute(SyncRun.objects.create(systems="Mist"))
+        self.assertEqual(set(run.results), {"Mist", "Mist access points", "Atlas"})
+        self.assertFalse(fake.paths())
+        self.assertEqual(Device.objects.count(), 2)  # the Google-only run's one Chromebook plus NOGOOGLE1
+        from .sync import as_of
+        self.assertEqual(set(as_of()), {"Google", "Incident IQ", "Mist"})  # Meraki was never connected
+
     def test_rate_limits_are_waited_out(self):
         answers = iter([FakeResponse(status=429), google_page(chromebook())])
         with incident_iq(IIQ_ROUTES, others={**others(), GOOGLE_DEVICES_URL: lambda kwargs: next(answers)}), \
@@ -310,8 +339,21 @@ class PageTests(TestCase):
         self.assertFalse(SavedReport.objects.exists())
 
     def test_sync_now_queues_a_run(self):
-        self.client.post(reverse("sync-now"), {"next": reverse("reports")})
-        self.assertEqual(SyncRun.objects.filter(state=SyncRun.REQUESTED, requested_by="tech").count(), 1)
+        page = self.client.get(reverse("reports"))
+        self.assertContains(page, 'name="platform" value="Meraki"')
+        self.assertContains(page, "Meraki <small>last never</small>")
+        self.client.post(reverse("sync-now"), {"next": reverse("reports")}, follow=True)
+        self.assertFalse(SyncRun.objects.filter(state=SyncRun.REQUESTED).exists())  # nothing ticked
+        self.client.post(reverse("sync-now"), {"next": reverse("reports"), "platform": ["Meraki", "Nope"]})
+        run = SyncRun.objects.get(state=SyncRun.REQUESTED, requested_by="tech")
+        self.assertEqual(run.platforms, ["Meraki"])
+        # A second ask joins the waiting run; "everything" widens it to all.
+        self.client.post(reverse("sync-now"), {"platform": "Google"})
+        run.refresh_from_db()
+        self.assertEqual(run.platforms, ["Google", "Meraki"])
+        self.client.post(reverse("sync-now"), {"everything": "1"})
+        run.refresh_from_db()
+        self.assertEqual((run.platforms, SyncRun.objects.filter(state=SyncRun.REQUESTED).count()), ([], 1))
         self.assertContains(self.client.get(reverse("reports")), "Syncing")
 
 
@@ -428,6 +470,14 @@ class NetworkGearTests(TestCase):
         key = Psk.objects.get()
         self.assertEqual((key.name, key.role, key.expires), ("teacher@example.org", "StaffBYOD", None))
         self.assertNotIn("do-not-copy-this", json.dumps(list(Psk.objects.values()), default=str))
+
+    def test_meraki_alone_asks_nothing_else(self):
+        gear_sync()
+        with incident_iq(IIQ_ROUTES, others={**others(), **gear_routes()}) as fake:
+            run = execute(SyncRun.objects.create(systems="Meraki"))
+        self.assertEqual((run.state, list(run.results)), (SyncRun.DONE, ["Meraki"]))
+        self.assertTrue(all("meraki.com" in u for u in fake.urls()))
+        self.assertEqual(NetDevice.objects.get(mac=MIST_AP_MAC).uplink_port, "20")
 
     def test_a_meraki_failure_keeps_yesterdays_meraki_gear(self):
         gear_sync()
