@@ -12,4 +12,4 @@ RUN DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput \
 USER atlas
 
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn atlas.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn atlas.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gthread --threads 4 --no-control-socket"]
