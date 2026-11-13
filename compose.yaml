@@ -26,5 +26,18 @@ services:
     ports:
       - "${ATLAS_PORT:-8000}:8000"
 
+  # The nightly copy for Reports (2:00 AM, ATLAS_SYNC_HOUR and ATLAS_TIME_ZONE
+  # in .env change it), plus any "Sync now". Logs: docker compose logs sync
+  sync:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "manage.py", "run_sync_schedule"]
+
 volumes:
   db-data:

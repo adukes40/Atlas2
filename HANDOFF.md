@@ -1,6 +1,6 @@
 # Handoff
 
-Last updated 2026-11-13.
+Last updated 2026-11-13 (Reports).
 
 ## Done
 
@@ -66,6 +66,31 @@ Last updated 2026-11-13.
     Nothing owed. The response shape (`{"Item": {...}}` or the bare user) is
     not yet checked against live Incident IQ. 118 tests.
 
+12. Reports and the nightly sync (2026-11-13). Layout "A with B's tiles",
+    picked by Austin from four mockups: an Overview of count tiles (with a
+    30-day trend once nights accumulate), then a library of 16 reports, each
+    one table with filter chips on any field, Columns, Group by, Save as and
+    Export CSV. Column headers and group headings carry the accent colour
+    (Austin asked for them to stand out). Technicians see every report.
+    - `app/reports/`: `sync.py` copies Google (every Chromebook), Incident IQ
+      (every asset, every person with Fee Tracker balance) and Mist (Wi-Fi
+      clients seen in the last day, Chromebook MACs only) and rebuilds the
+      `Device` and `Person` tables in one transaction. Google or Incident IQ
+      failing keeps yesterday's copy; Mist failing rebuilds with the
+      `Sighting` rows already kept (they accumulate, so "last on our network"
+      reaches back past one day). Requests retry on 429, timeouts and 5xx
+      (30 s, doubling, 3 times; `integrations/http.with_retries`).
+    - `catalog.py` holds every field, filter operation and report. A report is
+      only starting filters, so adding a report is a few lines there.
+    - The `sync` service in compose.yaml runs `manage.py run_sync_schedule`:
+      2:00 AM America/New_York (`ATLAS_SYNC_HOUR`, `ATLAS_TIME_ZONE`), plus
+      "Sync now" from Reports or System, checked each minute. It also runs
+      right after first start, since that day's 2 AM run is missing.
+      `manage.py sync` runs one by hand. Runs are listed on System.
+    - With 28,000 made-up devices and 14,000 people, the rebuild took 5 s on
+      SQLite and every report page loaded in under 150 ms.
+    138 tests.
+
 ## How the three new connections work
 
 - Google: service account JSON key (stored encrypted) plus an admin email to
@@ -84,6 +109,19 @@ Last updated 2026-11-13.
   `views._save_and_test` and `templates/integrations/connection.html`.
 
 ## Not confirmed
+
+- Reports sync against the live systems. Incident IQ paging comes from the
+  original ATLAS's notes (assets: POST body Paging; people: GET
+  `/users?$p=&$s=`), page size 500 asked for; the sync follows TotalRows if
+  Incident IQ caps the page smaller. The people list's field names
+  (FullName, RoleName or Role.Name, LocationName or Location.Name, IsActive,
+  CustomFieldValues for fees) have fallbacks but are unchecked. Status words
+  in "Lost but still online" (lost, stolen, missing, retired, dispos), role
+  "Student", and "student" OU / "staff" policy in "Wrong network" are
+  guesses the chips let anyone change.
+- Meraki is not in the nightly copy: Chromebooks are on Mist Wi-Fi, and
+  Meraki's network client list pages by Link headers that `get_json` does
+  not expose.
 
 - Open tickets (confirmed on the live site 2026-11-13): Incident IQ files
   tickets under the person, its `OpenTickets`/`HasOpenTickets` on the asset
@@ -114,5 +152,6 @@ Atlas runs in an LXC container as root at /opt/atlas, so commands need no sudo.
    API, a new scope) and Manage Device (Atlas only reads from vendors).
 3. Possibly: look up a device Incident IQ does not have by asking Google
    directly, and Mist wired clients for docked devices.
-4. Reports from a nightly sync (the Reports page says this is coming).
+4. Run the first sync on the live site (System, Sync now, or
+   `docker compose exec sync python manage.py sync`) and check its counts.
 5. HTTPS in front of Atlas before use outside a trusted network.

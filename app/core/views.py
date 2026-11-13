@@ -1,4 +1,5 @@
 import django
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -12,6 +13,8 @@ from django.views.decorators.http import require_POST
 
 from .context import MODE_COOKIE, MODES
 from .forms import OrganizationForm, UserForm
+from reports.models import SyncRun
+
 from .models import Organization
 
 
@@ -27,11 +30,6 @@ def _database_ok():
 def healthz(request):
     ok = _database_ok()
     return JsonResponse({"ok": ok}, status=200 if ok else 503)
-
-
-@login_required
-def reports(request):
-    return render(request, "core/reports.html", {"section": "reports"})
 
 
 @login_required
@@ -82,6 +80,8 @@ def system(request):
             "database_vendor": connection.vendor,
             "django_version": django.get_version(),
             "now": timezone.now(),
+            "sync_runs": SyncRun.objects.all()[:5],
+            "sync_tz": settings.ATLAS_TIME_ZONE,
         },
     )
 

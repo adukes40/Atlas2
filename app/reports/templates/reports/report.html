@@ -1,0 +1,72 @@
+{% extends "reports/layout.html" %}
+{% block report %}
+<section class="card rep-card">
+  <div class="rep-head">
+    <div>
+      <h2 class="rep-title">{{ report.title }}</h2>
+      <p class="muted">{{ report.question }}</p>
+      {% if report.note %}<p class="hint">{{ report.note }}</p>{% endif %}
+    </div>
+    <div class="rep-actions">
+      <details class="pop"><summary class="btn quiet sm">Columns</summary>
+        <form method="get" class="pop-body">
+          {% for t in tokens %}<input type="hidden" name="f" value="{{ t }}">{% endfor %}
+          {% if edited %}<input type="hidden" name="edited" value="1">{% endif %}
+          <label for="g">Group by</label>
+          <select id="g" name="g"><option value="">No grouping</option>{% for f in fields %}<option value="{{ f.key }}"{% if f.key == group_key %} selected{% endif %}>{{ f.label }}</option>{% endfor %}</select>
+          <fieldset><legend>Columns</legend>
+          {% for f in fields %}<label class="tick"><input type="checkbox" name="c" value="{{ f.key }}"{% if f.key in column_keys %} checked{% endif %}> {{ f.label }}{% if f.system %} <small>{{ f.system }}</small>{% endif %}</label>{% endfor %}
+          </fieldset>
+          <button class="btn sm" type="submit">Apply</button>
+        </form>
+      </details>
+      <details class="pop"><summary class="btn quiet sm">Save as…</summary>
+        <form method="post" action="{% url 'save-report' report.slug %}" class="pop-body">
+          {% csrf_token %}<input type="hidden" name="query" value="{{ query_string }}">
+          <label for="save-name">Name</label><input id="save-name" name="name" type="text" maxlength="100" required>
+          <button class="btn sm" type="submit">Save</button>
+        </form>
+      </details>
+      <a class="btn sm" href="{{ csv_url }}">Export CSV</a>
+    </div>
+  </div>
+
+  <div class="chips">
+    {% for c in chips %}<span class="pill">{{ c.filter.field.label }} <b>{{ c.filter.wording }}</b><a href="{{ c.remove }}" aria-label="Remove filter {{ c.filter.field.label }}">×</a></span>{% endfor %}
+    <details class="pop"{% if pick %} open{% endif %}><summary class="pill add">+ Filter on anything</summary>
+      <form method="get" class="pop-body">
+        {% for t in tokens %}<input type="hidden" name="f" value="{{ t }}">{% endfor %}
+        <input type="hidden" name="edited" value="1">
+        {% if pick %}
+          <input type="hidden" name="add_field" value="{{ pick.key }}">
+          <p><b>{{ pick.label }}</b></p>
+          <label for="add-op">Show rows where it</label>
+          <select id="add-op" name="add_op">{% for op, words in pick_ops %}<option value="{{ op }}">{{ words }}</option>{% endfor %}</select>
+          {% if pick.kind != 'bool' %}<label for="add-value">Value</label><input id="add-value" name="add_value" type="text" placeholder="{% if pick.kind == 'when' or pick.kind == 'day' %}Number of days{% elif pick.kind == 'text' %}Separate choices with commas{% else %}Number{% endif %}">{% endif %}
+          <button class="btn sm" type="submit">Add filter</button>
+        {% else %}
+          <label for="pick">Field</label>
+          <select id="pick" name="pick">{% for f in fields %}<option value="{{ f.key }}">{{ f.label }}{% if f.system %} ({{ f.system }}){% endif %}</option>{% endfor %}</select>
+          <button class="btn sm" type="submit">Next</button>
+        {% endif %}
+      </form>
+    </details>
+    <span class="count">{{ total_display }} {% if groups is not None %}row{{ total|pluralize }} in {{ groups|length }} group{{ groups|length|pluralize }}{% elif report.base == 'people' %}{% if total == 1 %}person{% else %}people{% endif %}{% elif report.base == 'lookups' %}lookup{{ total|pluralize }}{% else %}device{{ total|pluralize }}{% endif %}</span>
+  </div>
+
+  {% if groups is not None %}
+  <div class="table-wrap"><table class="rep-table">
+    <thead><tr><th scope="col">{{ group_label }}</th><th scope="col" class="num">Count</th></tr></thead>
+    <tbody>{% for g in groups %}<tr><td>{% if g.url %}<a href="{{ g.url }}">{{ g.label }}</a>{% else %}{{ g.label }}{% endif %}</td><td class="num">{{ g.count }}</td></tr>{% empty %}<tr><td colspan="2" class="muted">Nothing matches these filters.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="hint"><a href="{{ ungroup_url }}">Show every row instead</a></p>
+  {% else %}
+  <div class="table-wrap"><table class="rep-table">
+    <thead><tr>{% for h in headers %}<th scope="col"{% if h.sorted %} aria-sort="{% if h.down %}descending{% else %}ascending{% endif %}"{% endif %}><a href="{{ h.url }}">{{ h.field.label }}{% if h.sorted %} {% if h.down %}↓{% else %}↑{% endif %}{% endif %}</a></th>{% endfor %}</tr></thead>
+    <tbody>{% for row in rows %}<tr>{% for cell in row %}<td{% if cell.hit %} class="hit"{% endif %}{% if cell.title %} title="{{ cell.title }}"{% endif %}>{% if cell.link %}<a class="mono" href="{{ cell.link }}">{{ cell.text }}</a>{% else %}{{ cell.text }}{% endif %}</td>{% endfor %}</tr>
+    {% empty %}<tr><td colspan="{{ headers|length }}" class="muted">Nothing matches these filters.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if prev_url or next_url %}<div class="pager">{% if prev_url %}<a href="{{ prev_url }}">← Previous</a>{% endif %}<span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if next_url %}<a href="{{ next_url }}">Next →</a>{% endif %}</div>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

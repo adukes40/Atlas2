@@ -10,6 +10,7 @@ from urllib.parse import quote, urlsplit
 import requests
 
 from ..errors import IntegrationError
+from ..http import passing, with_retries
 
 API = "/api/v1.0"
 TIMEOUT = 10  # seconds
@@ -24,11 +25,11 @@ class AuthFailed(IncidentIQError):
 
 
 class Unreachable(IncidentIQError):
-    pass
+    retryable = True
 
 
 class RateLimited(IncidentIQError):
-    pass
+    retryable = True
 
 
 class BadResponse(IncidentIQError):
@@ -58,6 +59,8 @@ class IncidentIQClient:
         self._site_id = site_id
         self._product_id = product_id
         self._session = session or requests.Session()
+        self.timeout = TIMEOUT  # the nightly sync allows longer for big pages, and retries
+        self.retries = 0
 
     def _headers(self):
         headers = {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
@@ -72,13 +75,16 @@ class IncidentIQClient:
         return headers
 
     def _request(self, method, path, **kwargs):
+        return with_retries(lambda: self._request_once(method, path, **kwargs), self.retries)
+
+    def _request_once(self, method, path, **kwargs):
         host = urlsplit(self.base_url).hostname
         try:
             response = self._session.request(
                 method,
                 f"{self.base_url}{API}{path}",
                 headers=self._headers(),
-                timeout=TIMEOUT,
+                timeout=self.timeout,
                 **kwargs,
             )
         except requests.Timeout:
@@ -97,10 +103,10 @@ class IncidentIQClient:
         if response.status_code == 404:
             raise BadResponse("Incident IQ did not recognize the request (HTTP 404). Check the site address.")
         if response.status_code >= 500:
-            raise BadResponse(
+            raise passing(BadResponse(
                 f"Incident IQ had an internal error (HTTP {response.status_code}). "
                 "This often means it needs the Site ID and Product ID as well."
-            )
+            ))
         if response.status_code != 200:
             raise BadResponse(f"Incident IQ answered with an error (HTTP {response.status_code}).")
         try:
@@ -135,6 +141,19 @@ class IncidentIQClient:
                 return [item for item in items if isinstance(item, dict)]
         return []
 
+    def assets_page(self, index, size):
+        """One page of every asset, and the total. Incident IQ pages assets by the request body."""
+        data = self._request(
+            "POST", "/assets", json={"OnlyShowDeleted": False, "Paging": {"PageSize": size, "PageIndex": index}}
+        )
+        return _page(data)
+
+    def users_page(self, index, size):
+        """One page of every person. Incident IQ ignores paging in a POST body for
+        people, so it goes in the address."""
+        data = self._request("GET", f"/users?$p={index}&$s={size}")
+        return _page(data)
+
     def location_name(self, location_id):
         data = self._request("GET", f"/locations/{quote(location_id, safe='')}")
         return (data.get("Location") or {}).get("Name") or None
@@ -159,6 +178,14 @@ class IncidentIQClient:
             for item in data.get("Items") or []
             if isinstance(item, dict) and not item.get("IsClosed", True) and _mentions(item, asset_id)
         ]
+
+
+def _page(data):
+    """(items, total rows or None)."""
+    paging = data.get("Paging") if isinstance(data.get("Paging"), dict) else {}
+    total = paging.get("TotalRows")
+    items = [item for item in data.get("Items") or [] if isinstance(item, dict)]
+    return items, total if isinstance(total, int) and total >= 0 else None
 
 
 def _mentions(ticket, asset_id):

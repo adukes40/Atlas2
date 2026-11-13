@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load tz %}
 {% block title %}System{% endblock %}
 {% block content %}
 <h1>System</h1>
@@ -11,5 +12,15 @@
     <div class="kv"><dt>Django version</dt><dd class="mono">{{ django_version }}</dd></div>
     <div class="kv"><dt>Server time (UTC)</dt><dd>{{ now|date:"M j, Y, g:i A" }}</dd></div>
   </dl>
+</section>
+<section class="card narrow">
+  <div class="card-head"><h2>Reports sync</h2>
+    <form method="post" action="{% url 'sync-now' %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'system' %}"><button class="btn quiet sm" type="submit">Sync now</button></form></div>
+  <p class="muted">Atlas copies Incident IQ, Google and Mist every night for Reports. The last five runs:</p>
+  {% for run in sync_runs %}
+  <h3>{{ run.created_at|timezone:sync_tz|date:"M j, g:i A" }} · {% if run.state == 'done' %}<span class="ok">Finished</span>{% elif run.state == 'failed' %}<span class="warn">Failed</span>{% elif run.state == 'running' %}Running{% else %}Waiting to start{% endif %}{% if run.requested_by %} · asked for by {{ run.requested_by }}{% endif %}</h3>
+  <dl>{% for name, result in run.results.items %}<div class="kv"><dt>{{ name }}</dt><dd{% if not result.ok %} class="warn"{% endif %}>{% firstof result.detail result.error %}{% if result.seconds %} <span class="muted">({{ result.seconds }}s)</span>{% endif %}</dd></div>{% endfor %}</dl>
+  {% empty %}<p style="margin-top:8px">No sync has run yet.</p>
+  {% endfor %}
 </section>
 {% endblock %}

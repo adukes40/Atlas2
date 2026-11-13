@@ -200,3 +200,27 @@ def normalize_user_fees(raw):
     """The Fee Tracker charges on one person, or None if they have no fee record."""
     user = raw.get("Item") if isinstance(raw.get("Item"), dict) else raw
     return _fees(user)
+
+
+def normalize_user(raw):
+    """One person from Incident IQ's list of people, as a Person plus their
+    fees (None when they have no Fee Tracker record) and whether they are active.
+    The list's field names are not all confirmed, so each has a fallback."""
+    user_id = _text(raw.get("UserId"))
+    name = _text(raw.get("FullName")) or " ".join(
+        part for part in (_text(raw.get("FirstName")), _text(raw.get("LastName"))) if part
+    )
+    location = raw.get("Location") if isinstance(raw.get("Location"), dict) else {}
+    role = raw.get("Role") if isinstance(raw.get("Role"), dict) else {}
+    person = Person(
+        user_id="" if user_id == NO_ID else user_id,
+        name=name,
+        email=_text(raw.get("Email")),
+        school_id=_text(raw.get("SchoolIdNumber")),
+        role=_text(raw.get("RoleName")) or _text(role.get("Name")),
+        grade=_text(raw.get("Grade")),
+        homeroom=_text(raw.get("Homeroom")),
+        location=_text(raw.get("LocationName")) or _text(location.get("Name")),
+    )
+    active = raw.get("IsActive", True) is not False and not raw.get("IsDeleted")
+    return person, _fees(raw), active

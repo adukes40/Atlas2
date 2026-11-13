@@ -27,6 +27,12 @@ FIELDS = (
     "bootMode,systemRamTotal,systemRamFreeReports,diskVolumeReports)"
 )
 
+# The nightly copy for Reports: no memory or disk reports, which are large.
+SYNC_FIELDS = (
+    "chromeosdevices(deviceId,serialNumber,status,orgUnitPath,lastSync,recentUsers(email),macAddress,"
+    "ethernetMacAddress,model,osVersion,annotatedAssetId,autoUpdateThrough)"
+)
+
 # Access tokens last an hour. Keep one per process so a lookup does not sign in every time.
 _tokens = {}
 
@@ -62,6 +68,8 @@ class GoogleClient:
         self._key = read_key(key_json)
         self.admin_email = admin_email
         self._session = session or requests.Session()
+        self.timeout = TIMEOUT  # the nightly sync allows longer for big pages, and retries
+        self.retries = 0
 
     def _assertion(self):
         now = int(time.time())
@@ -127,12 +135,27 @@ class GoogleClient:
             rejected=f"Google refused. Check that {self.admin_email} can view Chrome devices in the Admin console.",
             headers={"Authorization": f"Bearer {self._access_token()}", "Accept": "application/json"},
             params=params,
+            timeout=self.timeout,
+            retries=self.retries,
         )
         return data if isinstance(data, dict) else {}
 
     def check(self):
         """Prove the key, delegation and admin work."""
         self._get({"maxResults": 1, "projection": "BASIC", "fields": "chromeosdevices(deviceId)"})
+
+    def all_chromebooks(self):
+        """Every Chromebook in the domain, a page (up to 300) at a time."""
+        token = None
+        while True:
+            params = {"projection": "FULL", "maxResults": 300, "fields": f"nextPageToken,{SYNC_FIELDS}"}
+            if token:
+                params["pageToken"] = token
+            page = self._get(params)
+            yield from (d for d in page.get("chromeosdevices") or [] if isinstance(d, dict))
+            token = page.get("nextPageToken")
+            if not token:
+                return
 
     def find_chromebook(self, serial):
         """The Chromebook with exactly this serial number, or None."""
