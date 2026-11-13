@@ -1,12 +1,17 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
+from devices import views as device_views
+from integrations import views as integration_views
+
 from . import views
 
 urlpatterns = [
-    path("", views.device360, name="device360"),
+    path("", device_views.device360, name="device360"),
+    path("lookups/close/", device_views.close_lookup, name="close-lookup"),
     path("reports/", views.reports, name="reports"),
     path("settings/", views.settings_page, name="settings"),
+    path("settings/incident-iq/", integration_views.incidentiq_settings, name="settings-incidentiq"),
     path("system/", views.system, name="system"),
     path("appearance/", views.appearance, name="appearance"),
     path("healthz/", views.healthz, name="healthz"),

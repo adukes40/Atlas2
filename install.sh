@@ -136,6 +136,15 @@ prepare_env() {
     ok "DJANGO_SECRET_KEY already set; not changed"
   fi
 
+  # Losing this key means every saved API token has to be typed in again,
+  # so an existing one is never replaced.
+  if [[ -z "$(env_get ATLAS_ENCRYPTION_KEY)" ]]; then
+    env_set ATLAS_ENCRYPTION_KEY "$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')"
+    ok "Generated ATLAS_ENCRYPTION_KEY"
+  else
+    ok "ATLAS_ENCRYPTION_KEY already set; not changed"
+  fi
+
   # Postgres only reads its password the first time the database is created,
   # so an existing one must never be replaced.
   if [[ -z "$(env_get POSTGRES_PASSWORD)" ]]; then

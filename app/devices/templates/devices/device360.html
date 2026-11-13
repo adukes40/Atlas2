@@ -1,0 +1,123 @@
+{% extends "core/base.html" %}
+{% block title %}{% if device %}{{ device.key }}{% else %}Device 360{% endif %}{% endblock %}
+{% block content %}
+{% if open_lookups %}
+<div class="tabs" role="group" aria-label="Open lookups">
+  {% for tab in open_lookups %}
+  <div class="tab"{% if tab.key == current_key %} aria-current="true"{% endif %}>
+    <a href="{% url 'device360' %}?q={{ tab.key|urlencode }}" title="{{ tab.label }}">{{ tab.key }}</a>
+    <form method="post" action="{% url 'close-lookup' %}">{% csrf_token %}
+      <input type="hidden" name="key" value="{{ tab.key }}"><input type="hidden" name="current" value="{{ current_key }}">
+      <button type="submit" aria-label="Close {{ tab.key }}">&times;</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if device %}
+<div class="d-head">
+  <div>
+    <h1>{{ device.model|default:"Device" }}</h1>
+    <p class="muted">Asset <span class="mono">{{ device.asset_tag|default:"none" }}</span> · Serial <span class="mono">{{ device.serial|default:"none" }}</span>{% if device.owner %} · Assigned to {{ device.owner.name }}{% endif %}</p>
+  </div>
+  <p class="muted">Answered in {{ result.took_ms }} ms</p>
+</div>
+
+<div class="strip">
+  <div class="cell off"><small><i></i>Location</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
+  <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
+  <div class="cell off"><small><i></i>Google</small><b>&mdash;</b><span>Not connected yet</span></div>
+  {% if device.fees.owed %}
+  <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed on this device{% endif %}</span></div>
+  {% else %}
+  <div class="cell"><small><i></i>Balance</small><b>$0.00</b><span>Nothing owed</span></div>
+  {% endif %}
+  {% if device.open_tickets %}
+  <div class="cell at"><small><i></i>Tickets</small><b>{{ device.open_tickets }} open</b><span>In Incident IQ</span></div>
+  {% else %}
+  <div class="cell"><small><i></i>Tickets</small><b>None open</b><span>In Incident IQ</span></div>
+  {% endif %}
+</div>
+
+<div class="grid four">
+  <section class="card">
+    <div class="card-head"><h2>Device</h2><span class="src">Incident IQ</span></div>
+    <dl>
+      <div class="kv"><dt>Status</dt><dd>{{ device.status|default:"Unknown" }}</dd></div>
+      <div class="kv"><dt>Asset tag</dt><dd class="mono">{{ device.asset_tag|default:"None" }}</dd></div>
+      <div class="kv"><dt>Serial</dt><dd class="mono">{{ device.serial|default:"None" }}</dd></div>
+      <div class="kv"><dt>Model</dt><dd>{{ device.model|default:"Unknown" }}</dd></div>
+      {% if device.category %}<div class="kv"><dt>Type</dt><dd>{{ device.category }}</dd></div>{% endif %}
+      <div class="kv"><dt>Location</dt><dd>{{ device.location|default:"Unknown" }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>{% if device.owner.role and device.owner.role != "Student" %}Assigned to{% else %}Student{% endif %}</h2><span class="src">Incident IQ</span></div>
+    {% if device.owner %}
+    <dl>
+      <div class="kv"><dt>Name</dt><dd>{{ device.owner.name|default:"Unknown" }}</dd></div>
+      {% if device.owner.school_id %}<div class="kv"><dt>ID</dt><dd class="mono">{{ device.owner.school_id }}</dd></div>{% endif %}
+      {% if device.owner.email %}<div class="kv"><dt>Email</dt><dd>{{ device.owner.email }}</dd></div>{% endif %}
+      {% if device.owner.location %}<div class="kv"><dt>School</dt><dd>{{ device.owner.location }}</dd></div>{% endif %}
+      {% if device.owner.grade %}<div class="kv"><dt>Grade</dt><dd>{{ device.owner.grade }}</dd></div>{% endif %}
+      {% if device.owner.homeroom %}<div class="kv"><dt>Homeroom</dt><dd>{{ device.owner.homeroom }}</dd></div>{% endif %}
+      {% if device.owner.role %}<div class="kv"><dt>Role</dt><dd>{{ device.owner.role }}</dd></div>{% endif %}
+    </dl>
+    {% else %}
+    <p class="muted">This device is not assigned to anyone in Incident IQ.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Network</h2><span class="src">Mist · Meraki</span></div>
+    <p class="muted">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Activity</h2><span class="src">Google</span></div>
+    <p class="muted">Recent sign-ins will show here once Google Workspace is connected.</p>
+  </section>
+</div>
+
+{% elif result and result.devices %}
+<div><h1>{{ result.devices|length }} matches for <span class="mono">{{ query }}</span></h1><p class="muted">Pick the one you mean.</p></div>
+<section class="card narrow">
+  <dl>
+    {% for match in result.devices %}
+    <div class="kv"><dt><a class="mono" href="{% url 'device360' %}?q={{ match.serial|default:match.asset_tag|urlencode }}">{{ match.asset_tag|default:match.serial }}</a></dt><dd>{{ match.model }}{% if match.owner %} · {{ match.owner.name }}{% endif %} · <span class="mono">{{ match.serial }}</span></dd></div>
+    {% endfor %}
+  </dl>
+</section>
+
+{% elif result %}
+<div><h1>Device 360</h1></div>
+<section class="card narrow" aria-live="polite">
+  {% if result.state == "not_found" %}
+  <div class="card-head"><h2>Nothing found</h2><span class="src mono">{{ query }}</span></div>
+  <p>Incident IQ has no device with that asset tag or serial number.</p>
+  <p class="muted">Check for a typo, or scan the tag again.</p>
+  {% elif result.state == "not_connected" %}
+  <div class="card-head"><h2>Nothing to look up yet</h2><span class="src mono">{{ query }}</span></div>
+  <p>Atlas is not connected to Incident IQ, so it cannot find this device.</p>
+  <p class="muted">{% if user.is_superuser %}<a href="{% url 'settings-incidentiq' %}">Connect Incident IQ in Settings.</a>{% else %}Ask an Atlas administrator to connect it in Settings.{% endif %}</p>
+  {% else %}
+  <div class="card-head"><h2>The lookup did not finish</h2><span class="src mono">{{ query }}</span></div>
+  <p>{{ result.message }}</p>
+  <p class="muted">{% if user.is_superuser %}<a href="{% url 'settings-incidentiq' %}">Check the Incident IQ connection.</a>{% else %}Try again, and tell an Atlas administrator if it keeps happening.{% endif %}</p>
+  {% endif %}
+</section>
+
+{% else %}
+<div>
+  <h1>Device 360</h1>
+  <p class="muted">One device, assembled from Incident IQ, Google Workspace, Mist and Meraki.</p>
+</div>
+<section class="card narrow">
+  <div class="card-head"><h2>Look up a device</h2></div>
+  <p>Type or scan an asset tag or serial number in the box above.</p>
+  <p class="muted">You will see who the device is assigned to, its status, any balance owed, and open tickets.</p>
+</section>
+{% endif %}
+{% endblock %}

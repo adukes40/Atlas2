@@ -1,0 +1,40 @@
+{% extends "core/base.html" %}
+{% block title %}Incident IQ{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / Integrations</p>
+  <h1>Incident IQ</h1>
+</div>
+<div class="grid">
+  <section class="card">
+    <div class="card-head"><h2>Connection</h2><span class="chip {% if config.ok %}ok{% elif config.last_error %}warn{% endif %}">{{ config.state }}</span></div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="field">
+        {{ form.base_url.label_tag }}
+        {{ form.base_url }}
+        {{ form.base_url.errors }}
+        <p class="hint">For example https://yourdistrict.incidentiq.com</p>
+      </div>
+      <div class="field">
+        {{ form.token.label_tag }}
+        {{ form.token }}
+        {{ form.token.errors }}
+        <p class="hint">{% if config.has_token %}A token is saved. Leave this empty to keep it, or paste a new one to replace it.{% else %}Create an API token in Incident IQ and paste it here.{% endif %}</p>
+      </div>
+      <button class="btn" type="submit">Save and test</button>
+    </form>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Status</h2></div>
+    <dl>
+      <div class="kv"><dt>State</dt><dd>{{ config.state }}</dd></div>
+      <div class="kv"><dt>Last checked</dt><dd>{% if config.last_checked_at %}{{ config.last_checked_at|date:"M j, Y, g:i A" }} UTC{% else %}Never{% endif %}</dd></div>
+      <div class="kv"><dt>Last worked</dt><dd>{% if config.last_ok_at %}{{ config.last_ok_at|date:"M j, Y, g:i A" }} UTC{% else %}Never{% endif %}</dd></div>
+      {% if config.last_error %}<div class="kv"><dt>Last problem</dt><dd class="warn">{{ config.last_error }}</dd></div>{% endif %}
+    </dl>
+    <p class="hint">Atlas only reads from Incident IQ. The token is stored encrypted and is never shown again.</p>
+  </section>
+</div>
+{% endblock %}

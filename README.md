@@ -4,8 +4,9 @@ Look up a device by asset tag or serial number and see, on one screen, who it
 belongs to, what state it is in, and where it was last seen. Atlas pulls from
 Incident IQ, Google Workspace, Mist and Meraki.
 
-This is milestone 1: the signed-in shell, themes, and light/dark mode. No
-vendor connections yet.
+Working today: sign-in, themes, and Incident IQ. A lookup shows the device,
+who it is assigned to, any balance owed, and open tickets. Google Workspace,
+Mist and Meraki come next.
 
 ## Install
 
@@ -34,6 +35,13 @@ To only check the server without changing anything: `sudo ./install.sh --check`.
 
 It is safe to run again. It never replaces a secret that is already set,
 never removes software, and never touches your data.
+
+## Connect Incident IQ
+
+Sign in as an administrator, open Settings, choose Incident IQ, and enter your
+site address and an API token. "Save and test" tells you straight away whether
+it worked. The token is stored encrypted and is never shown again. Atlas only
+reads from Incident IQ.
 
 ## Update
 
@@ -77,6 +85,8 @@ switch between Light, Dark and Auto for themselves. A theme is one CSS file in
 
 ## Not done yet
 
+- Keep a copy of `.env` somewhere safe. It holds `ATLAS_ENCRYPTION_KEY`; without
+  it the saved API tokens cannot be read and have to be entered again.
 - Atlas is served over plain HTTP. Put it behind HTTPS before it is used
   outside a trusted network, because sign-in passwords travel unencrypted.
 - Further users are created with `createsuperuser` until the Users screen exists.

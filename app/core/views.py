@@ -29,12 +29,6 @@ def healthz(request):
 
 
 @login_required
-def device360(request):
-    query = request.GET.get("q", "").strip()
-    return render(request, "core/device360.html", {"section": "device360", "query": query})
-
-
-@login_required
 def reports(request):
     return render(request, "core/reports.html", {"section": "reports"})
 

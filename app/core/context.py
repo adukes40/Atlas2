@@ -1,13 +1,12 @@
 from atlas import __version__
+from devices.models import recent_lookups
+from integrations.status import systems
 
 from .models import Organization
 from .themes import get_theme
 
 MODE_COOKIE = "atlas_mode"
 MODES = ("light", "dark", "auto")
-
-# Filled in for real as each integration is built.
-SYSTEMS = ["Incident IQ", "Google Workspace", "Mist", "Meraki"]
 
 
 def atlas(request):
@@ -23,6 +22,7 @@ def atlas(request):
         "mode_choice": choice,
         # Written to <html data-mode>. Empty for "auto", so the device decides.
         "mode": choice if choice != "auto" else None,
-        "systems": SYSTEMS,
+        "systems": systems(),
+        "recent_lookups": recent_lookups(request.user) if request.user.is_authenticated else [],
         "atlas_version": __version__,
     }
