@@ -30,6 +30,20 @@ Last updated 2026-11-13.
    always one administrator left. Passwords go through Django's validators.
    105 tests pass.
 
+8. Device 360 regrouped (option E, picked by Austin from five mockups on
+   2026-11-13). A header card with the device, links straight to it in
+   Incident IQ and Google Admin, Refresh, and a strip of Last seen, Google,
+   Balance and Tickets. Then a warning when Incident IQ and Google disagree,
+   and three cards: Who has it (person, link to them in Incident IQ, recent
+   Google sign-ins), Where it is (Mist or Meraki sighting, LAN and WAN IP,
+   MACs), What state it's in (ChromeOS, OU, update date with Supported /
+   Ending soon / Expired, boot mode, Google's asset ID, memory and storage
+   use). Fees owed (each Fee Tracker charge) and open tickets show below
+   when there are any. Open tickets are a new Incident IQ call, made only
+   when the asset has some. Disagreement checks are the original ATLAS's
+   (tag equals serial, last Google sign-in is not the assigned person) plus
+   Google's asset ID against the Incident IQ tag. 109 tests pass.
+
 ## How the three new connections work
 
 - Google: service account JSON key (stored encrypted) plus an admin email to
@@ -49,6 +63,15 @@ Last updated 2026-11-13.
 
 ## Not confirmed
 
+- Open tickets: `POST /tickets` with an `asset` facet filter. The original
+  ATLAS noted Incident IQ ignores filters on that call, so Atlas keeps only
+  tickets that are open and name the asset. If the list comes back empty on
+  the live site while the count says some are open, the page says so and
+  points to Incident IQ; the filter needs fixing then.
+- Fee Tracker charge names: the field holding a charge's name is not known,
+  so Atlas tries Description, Name, FeeName, FeeType, Title, Reason, else
+  shows "Charge".
+
 - Google, Mist and Meraki against the real systems. Field names were checked
   against live Google and Mist answers on 2026-11-13; Meraki's client search
   shape is from its API docs.
@@ -59,8 +82,12 @@ Atlas runs in an LXC container as root at /opt/atlas, so commands need no sudo.
 
 ## Next, in rough order
 
-1. Connect Google, Mist and Meraki on the live site and check a few lookups.
-2. Possibly: look up a device Incident IQ does not have by asking Google
+1. All four connect on the live site (2026-11-13). Look up a few in-use
+   Chromebooks to confirm the Mist and Meraki answers (Meraki is from docs).
+2. Check option E on the live site, especially open tickets and fee names.
+   Not built yet from the original: battery wear (needs Google's telemetry
+   API, a new scope) and Manage Device (Atlas only reads from vendors).
+3. Possibly: look up a device Incident IQ does not have by asking Google
    directly, and Mist wired clients for docked devices.
-3. Reports from a nightly sync (the Reports page says this is coming).
-4. HTTPS in front of Atlas before use outside a trusted network.
+4. Reports from a nightly sync (the Reports page says this is coming).
+5. HTTPS in front of Atlas before use outside a trusted network.

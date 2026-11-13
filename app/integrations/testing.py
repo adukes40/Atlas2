@@ -117,6 +117,13 @@ STANDARD = {
     f"/locations/{SCHOOL_ID}": FakeResponse(data={"Location": {"Name": "North Middle School"}}),
 }
 STANDARD["/assets/assettag/104482"] = items(asset())
+STANDARD["/tickets?$s=25"] = items(
+    {"TicketNumber": "5521", "Subject": "Cracked screen", "IsClosed": False, "CreatedDate": "2026-11-02T08:00:00Z",
+     "WorkflowStep": {"StepName": "Waiting on parts"}, "Assets": [{"AssetId": "a-1"}]},
+    # Closed, and on another asset: both are left out.
+    {"TicketNumber": "5400", "Subject": "Old ticket", "IsClosed": True, "Assets": [{"AssetId": "a-1"}]},
+    {"TicketNumber": "5999", "Subject": "Someone else's", "IsClosed": False, "Assets": [{"AssetId": "a-77"}]},
+)
 STANDARD["/assets/serial/7XK2RT3"] = items(asset())
 
 
@@ -147,8 +154,23 @@ def chromebook(**changes):
         "osVersion": "142.0.7444.100",
         "autoUpdateThrough": "2031-06-01",
         "macAddress": WIFI_MAC,
-        "recentUsers": [{"type": "USER_TYPE_MANAGED", "email": f"student{n}@students.example"} for n in range(1, 8)],
+        "recentUsers": [{"type": "USER_TYPE_MANAGED", "email": "jsample@students.example"}]
+        + [{"type": "USER_TYPE_MANAGED", "email": f"student{n}@students.example"} for n in range(1, 8)],
         "lastKnownNetwork": [{"ipAddress": "10.20.30.40", "wanIpAddress": "203.0.113.9"}],
+        "deviceId": "g-device-1",
+        "annotatedAssetId": "104482",
+        "bootMode": "Verified",
+        "systemRamTotal": "4000000000",
+        "systemRamFreeReports": [
+            {"reportTime": "2026-11-11T10:00:00Z", "systemRamFreeInfo": ["1000000000"]},
+            {"reportTime": "2026-11-12T10:00:00Z", "systemRamFreeInfo": ["3000000000", "2480000000"]},
+        ],
+        "diskVolumeReports": [
+            {"volumeInfo": [
+                {"volumeId": "small", "storageTotal": "1000000000", "storageFree": "900000000"},
+                {"volumeId": "stateful", "storageTotal": "32000000000", "storageFree": "15360000000"},
+            ]}
+        ],
     }
     raw.update(changes)
     return raw

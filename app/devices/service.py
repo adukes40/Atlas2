@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from integrations.errors import IntegrationError
 from integrations.google.normalize import Chromebook, normalize_chromebook
 from integrations.incidentiq.client import IncidentIQError
-from integrations.incidentiq.normalize import Device, normalize_asset
+from integrations.incidentiq.normalize import Device, normalize_asset, normalize_ticket
 from integrations.meraki import normalize as meraki_normalize
 from integrations.mist import normalize as mist_normalize
 from integrations.models import GoogleConfig, IncidentIQConfig, IncidentIQLocation, MerakiConfig, MistConfig
@@ -33,6 +33,8 @@ class LookupResult:
     devices: list[Device] = field(default_factory=list)
     message: str = ""
     took_ms: int = 0
+    iiq_url: str = ""  # the Incident IQ site, for links to the device and person
+    tickets_message: str = ""  # why open tickets could not be listed
     google: Part = field(default_factory=lambda: Part("Google Workspace"))
     chromebook: Chromebook | None = None
     network: list[Part] = field(default_factory=list)  # Mist, then Meraki
@@ -50,6 +52,26 @@ class LookupResult:
     @property
     def network_connected(self):
         return any(part.state != NOT_CONNECTED for part in self.network)
+
+    @property
+    def conflicts(self):
+        """Where Incident IQ and Google disagree, as sentences for a person.
+        The same checks the original ATLAS ran, plus the asset ID in Google."""
+        device, book, found = self.device, self.chromebook, []
+        if not device:
+            return found
+        if device.asset_tag and device.asset_tag == device.serial:
+            found.append("The asset tag in Incident IQ is the serial number, so a real tag was never entered.")
+        if not book:
+            return found
+        if book.asset_id and device.asset_tag and book.asset_id != device.asset_tag:
+            found.append(f"Google has asset ID {book.asset_id}, but Incident IQ has asset tag {device.asset_tag}.")
+        email = (device.owner.email if device.owner else "").lower()
+        if email and book.recent_users and book.recent_users[0].lower() != email:
+            found.append(
+                f"Incident IQ assigns it to {email}, but the last sign-in Google saw was {book.recent_users[0]}."
+            )
+        return found
 
 
 def _school_name(client, location_id):
@@ -86,12 +108,24 @@ def lookup(query):
         return LookupResult(query, ERROR, message=str(error))
 
     config.record_ok()
-    result = LookupResult(query, FOUND if devices else NOT_FOUND, devices=devices)
+    result = LookupResult(query, FOUND if devices else NOT_FOUND, devices=devices, iiq_url=client.base_url)
     if result.device:
+        _add_tickets(client, result.device, result)
         _add_google(result)
         _add_network(result)
     result.took_ms = int((time.monotonic() - started) * 1000)
     return result
+
+
+def _add_tickets(client, device, result):
+    """List the open tickets. Only asked when Incident IQ says there are some;
+    a failure leaves the count showing, never sinks the lookup."""
+    if not device.open_tickets or not device.asset_id:
+        return
+    try:
+        device.tickets = [normalize_ticket(raw) for raw in client.open_tickets(device.asset_id)]
+    except IncidentIQError as error:
+        result.tickets_message = str(error)
 
 
 def _ask(config, part, question):

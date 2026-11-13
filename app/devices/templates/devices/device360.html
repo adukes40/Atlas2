@@ -16,90 +16,101 @@
 {% endif %}
 
 {% if device %}
-<div class="d-head">
-  <div>
-    <h1>{{ device.model|default:"Device" }}</h1>
-    <p class="muted">Asset <span class="mono">{{ device.asset_tag|default:"none" }}</span> · Serial <span class="mono">{{ device.serial|default:"none" }}</span>{% if device.owner %} · Assigned to {{ device.owner.name }}{% endif %}</p>
+{% with book=result.chromebook seen=result.sighting %}
+<section class="card d-card">
+  <div class="d-head">
+    <div>
+      <p class="d-ids">{% if device.status %}<span class="chip">{{ device.status }}</span>{% endif %} <span class="muted">Asset <span class="mono">{{ device.asset_tag|default:"none" }}</span> · Serial <span class="mono">{{ device.serial|default:"none" }}</span></span></p>
+      <h1>{{ device.model|default:"Device" }}</h1>
+      <p class="d-links">
+        {% if device.asset_id %}<a href="{{ result.iiq_url }}/agent/assets/{{ device.asset_id|urlencode }}" target="_blank" rel="noopener">Open in Incident IQ</a>{% endif %}
+        {% if book.device_id %}<a href="https://admin.google.com/ac/chrome/devices/{{ book.device_id|urlencode }}" target="_blank" rel="noopener">Open in Google Admin</a>{% endif %}
+      </p>
+    </div>
+    <div class="d-actions">
+      <span class="muted">Answered in {{ result.took_ms }} ms</span>
+      <a class="btn quiet" href="{% url 'device360' %}?q={{ device.key|urlencode }}">Refresh</a>
+    </div>
   </div>
-  <p class="muted">Answered in {{ result.took_ms }} ms</p>
+  <div class="strip">
+    {% if seen %}
+    <div class="cell"><small><i></i>Last seen</small><b>{{ seen.last_seen_ago|default:"Unknown" }}</b><span>{{ seen.source }}{% if seen.place %}, {{ seen.place }}{% endif %}</span></div>
+    {% elif result.network_connected %}
+    <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Not seen on the network</span></div>
+    {% else %}
+    <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
+    {% endif %}
+    {% if book %}
+    <div class="cell{% if not book.active %} at{% endif %}"><small><i></i>Google</small><b>{{ book.status|default:"Unknown" }}</b><span>{% if book.last_sync %}Synced {{ book.last_sync_ago }}{% else %}Never synced{% endif %}</span></div>
+    {% elif result.google.state == "not_connected" %}
+    <div class="cell off"><small><i></i>Google</small><b>&mdash;</b><span>Not connected yet</span></div>
+    {% elif result.google.state == "error" %}
+    <div class="cell at"><small><i></i>Google</small><b>No answer</b><span>See the state card</span></div>
+    {% else %}
+    <div class="cell off"><small><i></i>Google</small><b>Not found</b><span>No Chromebook with this serial</span></div>
+    {% endif %}
+    {% if device.fees.owed %}
+    <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed on this device{% endif %}</span></div>
+    {% else %}
+    <div class="cell"><small><i></i>Balance</small><b>$0.00</b><span>Nothing owed</span></div>
+    {% endif %}
+    {% if device.open_tickets %}
+    <div class="cell at"><small><i></i>Tickets</small><b>{{ device.open_tickets }} open</b><span>In Incident IQ</span></div>
+    {% else %}
+    <div class="cell"><small><i></i>Tickets</small><b>None open</b><span>In Incident IQ</span></div>
+    {% endif %}
+  </div>
+</section>
+
+{% if result.conflicts %}
+<div class="alert" role="status">
+  <b>Incident IQ and Google disagree</b>
+  <ul>{% for problem in result.conflicts %}<li>{{ problem }}</li>{% endfor %}</ul>
 </div>
+{% elif book %}
+<p class="ok agree">Incident IQ and Google agree on this device.</p>
+{% endif %}
 
-<div class="strip">
-  {% with seen=result.sighting %}
-  {% if seen %}
-  <div class="cell"><small><i></i>Location</small><b>{{ seen.place|default:"Unknown site" }}</b><span>{{ seen.access_point|default:seen.source }}</span></div>
-  <div class="cell"><small><i></i>Last seen</small><b>{{ seen.last_seen_ago|default:"Unknown" }}</b><span>{{ seen.source }}</span></div>
-  {% elif result.network_connected %}
-  <div class="cell off"><small><i></i>Location</small><b>&mdash;</b><span>Not seen on the network</span></div>
-  <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Not in the last week</span></div>
-  {% else %}
-  <div class="cell off"><small><i></i>Location</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
-  <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
-  {% endif %}
-  {% endwith %}
-  {% if result.chromebook %}
-  <div class="cell{% if not result.chromebook.active %} at{% endif %}"><small><i></i>Google</small><b>{{ result.chromebook.status|default:"Unknown" }}</b><span>{% if result.chromebook.last_sync %}Synced {{ result.chromebook.last_sync_ago }}{% else %}Never synced{% endif %}</span></div>
-  {% elif result.google.state == "not_connected" %}
-  <div class="cell off"><small><i></i>Google</small><b>&mdash;</b><span>Not connected yet</span></div>
-  {% elif result.google.state == "error" %}
-  <div class="cell at"><small><i></i>Google</small><b>No answer</b><span>See the Activity card</span></div>
-  {% else %}
-  <div class="cell off"><small><i></i>Google</small><b>Not found</b><span>No Chromebook with this serial</span></div>
-  {% endif %}
-  {% if device.fees.owed %}
-  <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed on this device{% endif %}</span></div>
-  {% else %}
-  <div class="cell"><small><i></i>Balance</small><b>$0.00</b><span>Nothing owed</span></div>
-  {% endif %}
-  {% if device.open_tickets %}
-  <div class="cell at"><small><i></i>Tickets</small><b>{{ device.open_tickets }} open</b><span>In Incident IQ</span></div>
-  {% else %}
-  <div class="cell"><small><i></i>Tickets</small><b>None open</b><span>In Incident IQ</span></div>
-  {% endif %}
-</div>
-
-<div class="grid four">
+<div class="grid three">
   <section class="card">
-    <div class="card-head"><h2>Device</h2><span class="src">Incident IQ</span></div>
-    <dl>
-      <div class="kv"><dt>Status</dt><dd>{{ device.status|default:"Unknown" }}</dd></div>
-      <div class="kv"><dt>Asset tag</dt><dd class="mono">{{ device.asset_tag|default:"None" }}</dd></div>
-      <div class="kv"><dt>Serial</dt><dd class="mono">{{ device.serial|default:"None" }}</dd></div>
-      <div class="kv"><dt>Model</dt><dd>{{ device.model|default:"Unknown" }}</dd></div>
-      {% if device.category %}<div class="kv"><dt>Type</dt><dd>{{ device.category }}</dd></div>{% endif %}
-      <div class="kv"><dt>Location</dt><dd>{{ device.location|default:"Unknown" }}</dd></div>
-    </dl>
-  </section>
-
-  <section class="card">
-    <div class="card-head"><h2>{% if device.owner.role and device.owner.role != "Student" %}Assigned to{% else %}Student{% endif %}</h2><span class="src">Incident IQ</span></div>
+    <div class="card-head"><h2>Who has it</h2><span class="src">Incident IQ</span></div>
     {% if device.owner %}
+    <p class="who"><b>{{ device.owner.name|default:"Unknown" }}</b>{% if device.owner.user_id %} <a href="{{ result.iiq_url }}/agent/users/{{ device.owner.user_id|urlencode }}" target="_blank" rel="noopener">Incident IQ</a>{% endif %}</p>
+    {% if device.owner.role %}<p class="muted">{{ device.owner.role }}</p>{% endif %}
     <dl>
-      <div class="kv"><dt>Name</dt><dd>{{ device.owner.name|default:"Unknown" }}</dd></div>
       {% if device.owner.school_id %}<div class="kv"><dt>ID</dt><dd class="mono">{{ device.owner.school_id }}</dd></div>{% endif %}
-      {% if device.owner.email %}<div class="kv"><dt>Email</dt><dd>{{ device.owner.email }}</dd></div>{% endif %}
       {% if device.owner.location %}<div class="kv"><dt>School</dt><dd>{{ device.owner.location }}</dd></div>{% endif %}
       {% if device.owner.grade %}<div class="kv"><dt>Grade</dt><dd>{{ device.owner.grade }}</dd></div>{% endif %}
       {% if device.owner.homeroom %}<div class="kv"><dt>Homeroom</dt><dd>{{ device.owner.homeroom }}</dd></div>{% endif %}
-      {% if device.owner.role %}<div class="kv"><dt>Role</dt><dd>{{ device.owner.role }}</dd></div>{% endif %}
+      {% if device.owner.email %}<div class="kv"><dt>Email</dt><dd>{{ device.owner.email }}</dd></div>{% endif %}
     </dl>
     {% else %}
     <p class="muted">This device is not assigned to anyone in Incident IQ.</p>
     {% endif %}
+    {% if book.recent_users %}
+    <h3>Recent sign-ins (Google)</h3>
+    <ol class="plain">{% for email in book.recent_users %}<li>{{ email }}</li>{% endfor %}</ol>
+    {% endif %}
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Network</h2><span class="src">Mist · Meraki</span></div>
-    {% for seen in result.sightings %}
-    {% if result.sightings|length > 1 %}<h3>{{ seen.source }}</h3>{% endif %}
+    <div class="card-head"><h2>Where it is</h2><span class="src">Mist · Meraki</span></div>
+    {% if seen %}
+    <p class="who"><b>{{ seen.place|default:"Unknown site" }}</b></p>
+    <p class="muted">Seen {{ seen.last_seen_ago|default:"at an unknown time" }} by {{ seen.source }}</p>
+    {% endif %}
     <dl>
-      {% if seen.place %}<div class="kv"><dt>Site</dt><dd>{{ seen.place }}</dd></div>{% endif %}
       {% if seen.access_point %}<div class="kv"><dt>Access point</dt><dd>{{ seen.access_point }}</dd></div>{% endif %}
       {% if seen.ssid %}<div class="kv"><dt>Network</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
-      {% if seen.ip %}<div class="kv"><dt>IP address</dt><dd class="mono">{{ seen.ip }}</dd></div>{% endif %}
+      {% if seen.ip or book.last_ip %}<div class="kv"><dt>LAN IP</dt><dd class="mono">{{ seen.ip|default:book.last_ip }}</dd></div>{% endif %}
+      {% if book.wan_ip %}<div class="kv"><dt>WAN IP</dt><dd class="mono">{{ book.wan_ip }}</dd></div>{% endif %}
+      {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
       {% if seen.last_seen %}<div class="kv"><dt>Last seen</dt><dd>{{ seen.last_seen|date:"M j, g:i A" }} UTC</dd></div>{% endif %}
     </dl>
-    {% endfor %}
+    {% if result.sightings|length > 1 %}
+    <h3>Also seen</h3>
+    <dl>{% for other in result.sightings|slice:"1:" %}<div class="kv"><dt>{{ other.source }}</dt><dd>{{ other.place }}{% if other.access_point %}, {{ other.access_point }}{% endif %}{% if other.last_seen %}, {{ other.last_seen|date:"M j" }}{% endif %}</dd></div>{% endfor %}</dl>
+    {% endif %}
     {% for part in result.network %}
     {% if part.state == "error" %}<p class="warn">{{ part.name }}: {{ part.message }}</p>
     {% elif part.state == "not_found" %}<p class="muted">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
@@ -107,35 +118,69 @@
     {% if not result.network_connected %}
     <p class="muted">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
     {% endif %}
+    {% if device.location %}<p class="hint">Incident IQ lists it at {{ device.location }}.</p>{% endif %}
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Activity</h2><span class="src">Google</span></div>
-    {% with book=result.chromebook %}
+    <div class="card-head"><h2>What state it's in</h2><span class="src">Google</span></div>
     {% if book %}
     <dl>
-      <div class="kv"><dt>Status</dt><dd>{{ book.status|default:"Unknown" }}</dd></div>
+      {% if book.os_version %}<div class="kv"><dt>ChromeOS</dt><dd class="mono">{{ book.os_version }}</dd></div>{% endif %}
       {% if book.org_unit %}<div class="kv"><dt>OU</dt><dd>{{ book.org_unit }}</dd></div>{% endif %}
       <div class="kv"><dt>Last sync</dt><dd>{% if book.last_sync %}{{ book.last_sync|date:"M j, Y, g:i A" }} UTC{% else %}Never{% endif %}</dd></div>
-      {% if book.os_version %}<div class="kv"><dt>ChromeOS</dt><dd>{{ book.os_version }}</dd></div>{% endif %}
-      {% if book.updates_until %}<div class="kv"><dt>Updates until</dt><dd>{{ book.updates_until|date:"M Y" }}</dd></div>{% endif %}
-      {% if book.last_ip %}<div class="kv"><dt>Last IP</dt><dd class="mono">{{ book.last_ip }}</dd></div>{% endif %}
-      {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
+      {% if book.updates_until %}<div class="kv"><dt>Updates until</dt><dd>{{ book.updates_until|date:"M Y" }} <span class="chip {% if book.updates_state == 'Supported' %}ok{% else %}warn{% endif %}">{{ book.updates_state }}</span></dd></div>{% endif %}
+      {% if book.boot_mode %}<div class="kv"><dt>Boot mode</dt><dd>{{ book.boot_mode }}</dd></div>{% endif %}
+      {% if book.asset_id %}<div class="kv"><dt>Asset ID in Google</dt><dd class="mono">{{ book.asset_id }}</dd></div>{% endif %}
     </dl>
-    {% if book.recent_users %}
-    <h3>Recent sign-ins</h3>
-    <dl>{% for email in book.recent_users %}<div class="kv"><dt>{{ forloop.counter }}</dt><dd>{{ email }}</dd></div>{% endfor %}</dl>
+    {% if book.ram_used_pct is not None %}
+    <div class="use"><span>Memory in use</span><span>{{ book.ram_used_pct }}% of {{ book.ram_total_gb }} GB</span></div>
+    <div class="bar" aria-hidden="true"><i style="width: {{ book.ram_used_pct }}%"></i></div>
+    {% endif %}
+    {% if book.disk_used_pct is not None %}
+    <div class="use"><span>Storage used</span><span>{{ book.disk_used_pct }}% of {{ book.disk_total_gb }} GB</span></div>
+    <div class="bar" aria-hidden="true"><i style="width: {{ book.disk_used_pct }}%"></i></div>
     {% endif %}
     {% elif result.google.state == "error" %}
     <p class="warn">{{ result.google.message }}</p>
     {% elif result.google.state == "not_found" %}
     <p class="muted">Google Workspace has no Chromebook with serial <span class="mono">{{ device.serial }}</span>.</p>
     {% else %}
-    <p class="muted">Recent sign-ins will show here once Google Workspace is connected.</p>
+    <p class="muted">ChromeOS, OU, update dates and recent sign-ins will show here once Google Workspace is connected.</p>
     {% endif %}
-    {% endwith %}
   </section>
 </div>
+
+{% if device.fees.owed or device.open_tickets %}
+<div class="grid">
+  {% if device.fees.owed %}
+  <section class="card">
+    <div class="card-head"><h2>Fees owed</h2><span class="src">Fee Tracker</span></div>
+    <dl>
+      {% for charge in device.fees.charges %}
+      <div class="kv"><dt>{{ charge.label }}{% if charge.date %} <span class="muted">· {{ charge.date }}</span>{% endif %}</dt><dd>{{ charge.balance_display }}{% if charge.past_due %} <span class="warn">({{ charge.past_due_display }} past due)</span>{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endif %}
+  {% if device.open_tickets %}
+  <section class="card">
+    <div class="card-head"><h2>Open tickets</h2><span class="src">Incident IQ</span></div>
+    {% if device.tickets %}
+    <dl>
+      {% for ticket in device.tickets %}
+      <div class="kv"><dt><span class="mono">#{{ ticket.number }}</span> {{ ticket.subject }}</dt><dd>{{ ticket.status }}{% if ticket.opened %} <span class="muted">· {{ ticket.opened }}</span>{% endif %}</dd></div>
+      {% endfor %}
+    </dl>
+    {% elif result.tickets_message %}
+    <p class="warn">Incident IQ counts {{ device.open_tickets }} open, but the list did not load: {{ result.tickets_message }}</p>
+    {% else %}
+    <p class="muted">Incident IQ counts {{ device.open_tickets }} open, but did not list them. Open the device in Incident IQ to see them.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endif %}
+{% endwith %}
 
 {% elif result and result.devices %}
 <div><h1>{{ result.devices|length }} matches for <span class="mono">{{ query }}</span></h1><p class="muted">Pick the one you mean.</p></div>

@@ -20,6 +20,7 @@ from integrations.testing import (
     TOKEN,
     FakeResponse,
     asset,
+    chromebook,
     incident_iq,
     items,
 )
@@ -60,9 +61,32 @@ class LookupTests(TestCase):
             "$25.00",
             "$10.00 past due",
             "1 open",
+            f'href="{BASE}/agent/assets/a-1"',
+            f'href="{BASE}/agent/users/u-1"',
+            "Cracked screen",
+            "Waiting on parts",
+            "2026-10-01",
         ]:
             self.assertContains(page, expected)
         self.assertContains(page, 'class="cell at"', count=2)
+        self.assertNotContains(page, "Old ticket")
+        self.assertNotContains(page, "Someone else&#x27;s")
+
+    def test_tickets_that_do_not_load_leave_the_count(self):
+        routes = dict(STANDARD)
+        routes["/tickets?$s=25"] = FakeResponse(status=500)
+        page, _ = self.look_up("104482", routes)
+        self.assertContains(page, "Incident IQ counts 1 open, but the list did not load")
+        self.assertContains(page, "Jordan Sample")
+
+    def test_tickets_are_not_asked_for_when_none_are_open(self):
+        clean = asset(OpenTickets=0)
+        _, fake = self.look_up("104482", {"/assets/assettag/104482": items(clean)})
+        self.assertNotIn("/tickets?$s=25", fake.paths())
+
+    def test_a_tag_that_is_the_serial_is_flagged(self):
+        page, _ = self.look_up("104482", {"/assets/assettag/104482": items(asset(AssetTag="7XK2RT3"))})
+        self.assertContains(page, "so a real tag was never entered")
 
     def test_nothing_owed_and_no_tickets_are_not_flagged(self):
         clean = asset(OpenTickets=0, CustomFieldValues=[])
@@ -74,7 +98,8 @@ class LookupTests(TestCase):
     def test_a_staff_device_is_not_called_a_student(self):
         staff = asset(Owner={"UserId": "u-2", "FullName": "Casey Teacher", "RoleName": "Faculty"})
         page, _ = self.look_up("104482", {"/assets/assettag/104482": items(staff)})
-        self.assertContains(page, "<h2>Assigned to</h2>")
+        self.assertContains(page, '<p class="muted">Faculty</p>')
+        self.assertNotContains(page, "Student<")
 
     def test_an_unassigned_device(self):
         page, _ = self.look_up("104482", {"/assets/assettag/104482": items(asset(Owner=None))})
@@ -242,7 +267,7 @@ class GoogleAndNetworkTests(TestCase):
 
     def test_nothing_else_connected_reads_as_before(self):
         page = self.look_up()
-        self.assertContains(page, "Needs Mist or Meraki", count=2)
+        self.assertContains(page, "Needs Mist or Meraki", count=1)
         self.assertContains(page, "Not connected yet")
         self.assertContains(page, "once Google Workspace is connected")
 
@@ -260,12 +285,26 @@ class GoogleAndNetworkTests(TestCase):
             "District Office",
             "DO-AP-1",
             "Synced",
+            "203.0.113.9",
+            "Verified",
+            "38% of 4.0 GB",
+            "52% of 32.0 GB",
+            "https://admin.google.com/ac/chrome/devices/g-device-1",
+            "Incident IQ and Google agree",
         ]:
             self.assertContains(page, expected)
         self.assertNotContains(page, "student6@students.example")
-        # Mist saw it more recently than Meraki, so Mist fills the strip.
+        # Mist saw it more recently than Meraki, so Mist leads the network card.
         self.assertContains(page, "<b>North Middle School</b>")
         self.assertEqual(GoogleConfig.load().state, "Connected")
+
+    def test_disagreements_with_google_are_listed(self):
+        self.connect(mist=False, meraki=False)
+        other = chromebook(annotatedAssetId="104428", recentUsers=[{"email": "someone@students.example"}])
+        page = self.look_up(dict(STANDARD_OTHERS, **{GOOGLE_DEVICES_URL: FakeResponse(data={"chromeosdevices": [other]})}))
+        self.assertContains(page, "Incident IQ and Google disagree")
+        self.assertContains(page, "Google has asset ID 104428, but Incident IQ has asset tag 104482.")
+        self.assertContains(page, "the last sign-in Google saw was someone@students.example")
 
     def test_a_google_problem_does_not_sink_the_lookup(self):
         self.connect()

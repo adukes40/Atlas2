@@ -19,7 +19,8 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   They share `http.py` (requests and plain error messages), `errors.py`
   (`IntegrationError`), `network.py` (`Sighting`, MAC helper) and the abstract
   `Connection` model. `devices/service.py` asks Google by serial, then Mist and
-  Meraki by Google's MACs.
+  Meraki by Google's MACs. Incident IQ open tickets are fetched only when the
+  asset reports some. `LookupResult.conflicts` holds the Incident IQ vs Google checks.
 
 ## Conventions
 
