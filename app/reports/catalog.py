@@ -2,7 +2,7 @@
 
 A report is a starting set of filters on one of three tables (devices,
 people, lookups). Anyone can add, change or remove a filter on any field,
-so "filter on anything" and the 16 fixed reports are the same thing.
+so "filter on anything" and the fixed reports are the same thing.
 
 Filters travel in the page address as `f=<field>.<op>.<value>`.
 """
@@ -280,13 +280,6 @@ REPORTS = [
         "Chromebooks whose last Google sign-in is not the person Incident IQ has them assigned to.",
         "devices", ("signed_in_by_other.yes.",),
         DEVICE_COLUMNS + ("owner__email", "recent_user", "last_sync"), "-last_sync",
-    ),
-    Report(
-        "mismatches", "Inventory mismatches", G["who"],
-        "Serials in one system but not the other, Google asset IDs that differ from the Incident IQ tag, and tags that are the serial.",
-        "devices", ("mismatch.set.",),
-        ("asset_tag", "serial", "google_asset_id", "mismatch", "model", "google_model", "org_unit", "last_sync"), "mismatch",
-        note="\"Not in Google\" is only checked for Incident IQ assets whose model or category says Chromebook.",
     ),
     Report(
         "more-than-one", "People with more than one Chromebook", G["who"],
