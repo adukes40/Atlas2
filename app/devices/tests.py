@@ -74,15 +74,23 @@ class LookupTests(TestCase):
 
     def test_tickets_that_do_not_load_leave_the_count(self):
         routes = dict(STANDARD)
-        routes["/tickets?$s=25"] = FakeResponse(status=500)
+        routes["/tickets?$s=50"] = FakeResponse(status=500)
         page, _ = self.look_up("104482", routes)
         self.assertContains(page, "Incident IQ counts 1 open, but the list did not load")
         self.assertContains(page, "Jordan Sample")
 
-    def test_tickets_are_not_asked_for_when_none_are_open(self):
-        clean = asset(OpenTickets=0)
-        _, fake = self.look_up("104482", {"/assets/assettag/104482": items(clean)})
-        self.assertNotIn("/tickets?$s=25", fake.paths())
+    def test_tickets_filed_under_the_person_count_even_when_the_asset_says_none(self):
+        routes = dict(STANDARD)
+        routes["/assets/assettag/104482"] = items(asset(OpenTickets=0))
+        page, fake = self.look_up("104482", routes)
+        self.assertContains(page, "<b>1 open</b>")
+        self.assertContains(page, "Cracked screen")
+        body = [kw["json"] for _, url, kw in fake.calls if "/tickets" in url][0]
+        self.assertEqual(body["Filters"], [{"Facet": "user", "Id": "u-1"}])
+
+    def test_tickets_are_not_asked_for_on_an_unassigned_device(self):
+        _, fake = self.look_up("104482", {"/assets/assettag/104482": items(asset(Owner=None))})
+        self.assertNotIn("/tickets?$s=50", fake.paths())
 
     def test_a_tag_that_is_the_serial_is_flagged(self):
         page, _ = self.look_up("104482", {"/assets/assettag/104482": items(asset(AssetTag="7XK2RT3"))})

@@ -139,16 +139,17 @@ class IncidentIQClient:
         data = self._request("GET", f"/locations/{quote(location_id, safe='')}")
         return (data.get("Location") or {}).get("Name") or None
 
-    def open_tickets(self, asset_id):
-        """Open tickets on one asset (at most 25).
+    def open_tickets(self, asset_id, user_id):
+        """Open tickets on one asset (at most 50 of its person's tickets are read).
 
-        Incident IQ has been seen to ignore filters on this call, so every
-        ticket that comes back is checked for the asset before it is kept.
+        Incident IQ files tickets under the person and does not count them on
+        the asset, and its asset filter returns nothing, so this asks for the
+        assigned person's tickets and keeps the open ones that name the asset.
         """
         data = self._request(
             "POST",
-            "/tickets?$s=25",
-            json={"Filters": [{"Facet": "asset", "Id": asset_id}]},
+            "/tickets?$s=50",
+            json={"Schema": "All", "Filters": [{"Facet": "user", "Id": user_id}]},
         )
         return [
             item

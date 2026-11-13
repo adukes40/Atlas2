@@ -40,7 +40,7 @@ Last updated 2026-11-13.
    Ending soon / Expired, boot mode, Google's asset ID, memory and storage
    use). Fees owed (each Fee Tracker charge) and open tickets show below
    when there are any. Open tickets are a new Incident IQ call, made only
-   when the asset has some. Disagreement checks are the original ATLAS's
+   for the assigned person. Disagreement checks are the original ATLAS's
    (tag equals serial, last Google sign-in is not the assigned person) plus
    Google's asset ID against the Incident IQ tag. 109 tests pass.
 
@@ -63,11 +63,12 @@ Last updated 2026-11-13.
 
 ## Not confirmed
 
-- Open tickets: `POST /tickets` with an `asset` facet filter. The original
-  ATLAS noted Incident IQ ignores filters on that call, so Atlas keeps only
-  tickets that are open and name the asset. If the list comes back empty on
-  the live site while the count says some are open, the page says so and
-  points to Incident IQ; the filter needs fixing then.
+- Open tickets (confirmed on the live site 2026-11-13): Incident IQ files
+  tickets under the person, its `OpenTickets`/`HasOpenTickets` on the asset
+  stay 0, and the `asset` and `assetid` ticket facets return nothing or
+  everything. Atlas asks `POST /tickets` with the `user` facet (the assigned
+  person) and keeps open tickets whose JSON names the asset. A ticket on the
+  device filed for someone else is missed. `/assets/{id}/tickets` is a 404.
 - Fee Tracker charge names: the field holding a charge's name is not known,
   so Atlas tries Description, Name, FeeName, FeeType, Title, Reason, else
   shows "Charge".
