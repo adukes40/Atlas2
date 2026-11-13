@@ -60,6 +60,7 @@ class Fees:
 
 @dataclass
 class Ticket:
+    ticket_id: str = ""
     number: str = ""
     subject: str = ""
     status: str = ""
@@ -188,6 +189,7 @@ def normalize_asset(raw):
 
 def normalize_ticket(raw):
     return Ticket(
+        ticket_id=_text(raw.get("TicketId")),
         number=_text(raw.get("TicketNumber")),
         subject=_text(raw.get("Subject")),
         status=_text((raw.get("WorkflowStep") or {}).get("StepName")),

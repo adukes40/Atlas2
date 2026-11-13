@@ -118,7 +118,7 @@ STANDARD = {
 }
 STANDARD["/assets/assettag/104482"] = items(asset())
 STANDARD["/tickets?$s=50"] = items(
-    {"TicketNumber": "5521", "Subject": "Cracked screen", "IsClosed": False, "CreatedDate": "2026-11-02T08:00:00Z",
+    {"TicketId": "t-5521", "TicketNumber": "5521", "Subject": "Cracked screen", "IsClosed": False, "CreatedDate": "2026-11-02T08:00:00Z",
      "WorkflowStep": {"StepName": "Waiting on parts"}, "Assets": [{"AssetId": "a-1"}]},
     # Closed, and on another asset: both are left out.
     {"TicketNumber": "5400", "Subject": "Old ticket", "IsClosed": True, "Assets": [{"AssetId": "a-1"}]},
