@@ -14,6 +14,11 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   (`crypto.py`, key from `ATLAS_ENCRYPTION_KEY`), sidebar status (`status.py`)
 - `app/integrations/incidentiq/` `client.py` is the only code that talks to Incident IQ;
   `normalize.py` is the only code that reads its raw JSON
+- `app/integrations/google/`, `mist/`, `meraki/` the same split for the other three.
+  They share `http.py` (requests and plain error messages), `errors.py`
+  (`IntegrationError`), `network.py` (`Sighting`, MAC helper) and the abstract
+  `Connection` model. `devices/service.py` asks Google by serial, then Mist and
+  Meraki by Google's MACs.
 
 ## Conventions
 
@@ -21,7 +26,8 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
   Errors are exception subclasses whose message is written to be shown to a person.
 - Tokens are never logged, returned to a browser, or written back into a form.
 - Tests run against stand-ins (`app/integrations/testing.py`), never a real vendor.
-- Settings pages are superuser only. Atlas only reads from vendors.
+  `incident_iq(routes, others=...)` also answers Google, Mist and Meraki by full URL.
+- Settings pages are superuser only and go through `views._save_and_test`. Atlas only reads from vendors.
 - A theme is one CSS file in `app/core/static/core/themes/` plus an entry in `app/core/themes.py`.
 - User-facing text is plain language. Commit messages describe the change for an IT admin.
 
