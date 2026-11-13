@@ -5,7 +5,7 @@ Last updated 2026-11-13 (Reports).
 ## Done
 
 1. Milestone 1: signed-in shell, Device 360 / Reports / Settings / System
-   screens, themes (Graphite default, Slate, Caesar Rodney), light/dark/auto.
+   screens, themes (Graphite default, Slate), light/dark/auto.
 2. `install.sh`: one command to install or update on Ubuntu with Docker Compose.
 3. Milestone 2: Incident IQ lookups. Device, assigned person, fees owed, open
    tickets, open-lookup tabs, recent lookups, lookup log.
