@@ -25,9 +25,27 @@
 </div>
 
 <div class="strip">
+  {% with seen=result.sighting %}
+  {% if seen %}
+  <div class="cell"><small><i></i>Location</small><b>{{ seen.place|default:"Unknown site" }}</b><span>{{ seen.access_point|default:seen.source }}</span></div>
+  <div class="cell"><small><i></i>Last seen</small><b>{{ seen.last_seen_ago|default:"Unknown" }}</b><span>{{ seen.source }}</span></div>
+  {% elif result.network_connected %}
+  <div class="cell off"><small><i></i>Location</small><b>&mdash;</b><span>Not seen on the network</span></div>
+  <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Not in the last week</span></div>
+  {% else %}
   <div class="cell off"><small><i></i>Location</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
   <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
+  {% endif %}
+  {% endwith %}
+  {% if result.chromebook %}
+  <div class="cell{% if not result.chromebook.active %} at{% endif %}"><small><i></i>Google</small><b>{{ result.chromebook.status|default:"Unknown" }}</b><span>{% if result.chromebook.last_sync %}Synced {{ result.chromebook.last_sync_ago }}{% else %}Never synced{% endif %}</span></div>
+  {% elif result.google.state == "not_connected" %}
   <div class="cell off"><small><i></i>Google</small><b>&mdash;</b><span>Not connected yet</span></div>
+  {% elif result.google.state == "error" %}
+  <div class="cell at"><small><i></i>Google</small><b>No answer</b><span>See the Activity card</span></div>
+  {% else %}
+  <div class="cell off"><small><i></i>Google</small><b>Not found</b><span>No Chromebook with this serial</span></div>
+  {% endif %}
   {% if device.fees.owed %}
   <div class="cell at"><small><i></i>Balance</small><b>{{ device.fees.balance_display }}</b><span>{% if device.fees.past_due %}{{ device.fees.past_due_display }} past due{% else %}Owed on this device{% endif %}</span></div>
   {% else %}
@@ -72,12 +90,50 @@
 
   <section class="card">
     <div class="card-head"><h2>Network</h2><span class="src">Mist · Meraki</span></div>
+    {% for seen in result.sightings %}
+    {% if result.sightings|length > 1 %}<h3>{{ seen.source }}</h3>{% endif %}
+    <dl>
+      {% if seen.place %}<div class="kv"><dt>Site</dt><dd>{{ seen.place }}</dd></div>{% endif %}
+      {% if seen.access_point %}<div class="kv"><dt>Access point</dt><dd>{{ seen.access_point }}</dd></div>{% endif %}
+      {% if seen.ssid %}<div class="kv"><dt>Network</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
+      {% if seen.ip %}<div class="kv"><dt>IP address</dt><dd class="mono">{{ seen.ip }}</dd></div>{% endif %}
+      {% if seen.last_seen %}<div class="kv"><dt>Last seen</dt><dd>{{ seen.last_seen|date:"M j, g:i A" }} UTC</dd></div>{% endif %}
+    </dl>
+    {% endfor %}
+    {% for part in result.network %}
+    {% if part.state == "error" %}<p class="warn">{{ part.name }}: {{ part.message }}</p>
+    {% elif part.state == "not_found" %}<p class="muted">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
+    {% endfor %}
+    {% if not result.network_connected %}
     <p class="muted">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
+    {% endif %}
   </section>
 
   <section class="card">
     <div class="card-head"><h2>Activity</h2><span class="src">Google</span></div>
+    {% with book=result.chromebook %}
+    {% if book %}
+    <dl>
+      <div class="kv"><dt>Status</dt><dd>{{ book.status|default:"Unknown" }}</dd></div>
+      {% if book.org_unit %}<div class="kv"><dt>OU</dt><dd>{{ book.org_unit }}</dd></div>{% endif %}
+      <div class="kv"><dt>Last sync</dt><dd>{% if book.last_sync %}{{ book.last_sync|date:"M j, Y, g:i A" }} UTC{% else %}Never{% endif %}</dd></div>
+      {% if book.os_version %}<div class="kv"><dt>ChromeOS</dt><dd>{{ book.os_version }}</dd></div>{% endif %}
+      {% if book.updates_until %}<div class="kv"><dt>Updates until</dt><dd>{{ book.updates_until|date:"M Y" }}</dd></div>{% endif %}
+      {% if book.last_ip %}<div class="kv"><dt>Last IP</dt><dd class="mono">{{ book.last_ip }}</dd></div>{% endif %}
+      {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
+    </dl>
+    {% if book.recent_users %}
+    <h3>Recent sign-ins</h3>
+    <dl>{% for email in book.recent_users %}<div class="kv"><dt>{{ forloop.counter }}</dt><dd>{{ email }}</dd></div>{% endfor %}</dl>
+    {% endif %}
+    {% elif result.google.state == "error" %}
+    <p class="warn">{{ result.google.message }}</p>
+    {% elif result.google.state == "not_found" %}
+    <p class="muted">Google Workspace has no Chromebook with serial <span class="mono">{{ device.serial }}</span>.</p>
+    {% else %}
     <p class="muted">Recent sign-ins will show here once Google Workspace is connected.</p>
+    {% endif %}
+    {% endwith %}
   </section>
 </div>
 

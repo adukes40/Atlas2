@@ -8,11 +8,13 @@ from urllib.parse import quote, urlsplit
 
 import requests
 
+from ..errors import IntegrationError
+
 API = "/api/v1.0"
 TIMEOUT = 10  # seconds
 
 
-class IncidentIQError(Exception):
+class IncidentIQError(IntegrationError):
     """Base class. The message is written to be shown to a person."""
 
 

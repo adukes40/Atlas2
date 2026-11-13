@@ -1,13 +1,17 @@
 """What the sidebar and Settings show about each outside system."""
 
-from .models import IncidentIQConfig
+from .models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
+
+URL_NAMES = {
+    IncidentIQConfig: "settings-incidentiq",
+    GoogleConfig: "settings-google",
+    MistConfig: "settings-mist",
+    MerakiConfig: "settings-meraki",
+}
 
 
 def systems():
-    iiq = IncidentIQConfig.load()
+    configs = (model.load() for model in URL_NAMES)
     return [
-        {"name": "Incident IQ", "state": iiq.state, "ok": iiq.ok, "url_name": "settings-incidentiq"},
-        {"name": "Google Workspace", "state": "Not connected", "ok": False, "url_name": None},
-        {"name": "Mist", "state": "Not connected", "ok": False, "url_name": None},
-        {"name": "Meraki", "state": "Not connected", "ok": False, "url_name": None},
+        {"name": c.name, "state": c.state, "ok": c.ok, "url_name": URL_NAMES[type(c)]} for c in configs
     ]

@@ -3,8 +3,26 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from integrations.models import IncidentIQConfig
-from integrations.testing import BASE, SCHOOL_ID, STANDARD, TEST_KEY, TOKEN, FakeResponse, asset, incident_iq, items
+from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
+from integrations.testing import (
+    BASE,
+    GOOGLE_ADMIN,
+    GOOGLE_DEVICES_URL,
+    GOOGLE_KEY,
+    MERAKI_API,
+    MERAKI_ORG,
+    MIST_API,
+    MIST_ORG,
+    SCHOOL_ID,
+    STANDARD,
+    STANDARD_OTHERS,
+    TEST_KEY,
+    TOKEN,
+    FakeResponse,
+    asset,
+    incident_iq,
+    items,
+)
 
 from .models import LookupLog
 
@@ -182,3 +200,96 @@ class TabsAndRecentsTests(TestCase):
 
         self.client.force_login(User.objects.create_user("someone-else"))
         self.assertNotContains(self.client.get(reverse("reports")), "Recent lookups")
+
+
+@override_settings(ATLAS_ENCRYPTION_KEY=TEST_KEY)
+class GoogleAndNetworkTests(TestCase):
+    url = reverse("device360")
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from integrations.google import client as google_client
+
+        google_client._tokens.clear()
+        cache.clear()
+        self.client.force_login(User.objects.create_user("tech"))
+        iiq = IncidentIQConfig.load()
+        iiq.base_url = BASE
+        iiq.set_token(TOKEN)
+        iiq.save()
+
+    def connect(self, google=True, mist=True, meraki=True):
+        if google:
+            config = GoogleConfig.load()
+            config.admin_email = GOOGLE_ADMIN
+            config.set_token(GOOGLE_KEY)
+            config.save()
+        if mist:
+            config = MistConfig.load()
+            config.org_id = MIST_ORG
+            config.set_token("mist-token")
+            config.save()
+        if meraki:
+            config = MerakiConfig.load()
+            config.org_id = MERAKI_ORG
+            config.set_token("meraki-key")
+            config.save()
+
+    def look_up(self, others=STANDARD_OTHERS):
+        with incident_iq(STANDARD, others=others):
+            return self.client.get(self.url, {"q": "104482"})
+
+    def test_nothing_else_connected_reads_as_before(self):
+        page = self.look_up()
+        self.assertContains(page, "Needs Mist or Meraki", count=2)
+        self.assertContains(page, "Not connected yet")
+        self.assertContains(page, "once Google Workspace is connected")
+
+    def test_everything_connected_fills_every_card(self):
+        self.connect()
+        page = self.look_up()
+        for expected in [
+            "/Students/North Middle",
+            "student1@students.example",
+            "Jun 2031",
+            "North Middle School",
+            "NMS-AP-214",
+            "Students",
+            "10.20.30.41",
+            "District Office",
+            "DO-AP-1",
+            "Synced",
+        ]:
+            self.assertContains(page, expected)
+        self.assertNotContains(page, "student6@students.example")
+        # Mist saw it more recently than Meraki, so Mist fills the strip.
+        self.assertContains(page, "<b>North Middle School</b>")
+        self.assertEqual(GoogleConfig.load().state, "Connected")
+
+    def test_a_google_problem_does_not_sink_the_lookup(self):
+        self.connect()
+        page = self.look_up(dict(STANDARD_OTHERS, **{GOOGLE_DEVICES_URL: FakeResponse(status=500)}))
+        self.assertContains(page, "Jordan Sample")
+        self.assertContains(page, "Google had an internal error (HTTP 500).")
+        self.assertContains(page, "Atlas finds devices on the network by the MAC address", count=2)
+        self.assertEqual(GoogleConfig.load().state, "Error")
+
+    def test_a_chromebook_google_does_not_have(self):
+        self.connect(mist=False, meraki=False)
+        page = self.look_up(dict(STANDARD_OTHERS, **{GOOGLE_DEVICES_URL: FakeResponse(data={})}))
+        self.assertContains(page, "Google Workspace has no Chromebook with serial")
+
+    def test_not_seen_on_the_network(self):
+        self.connect(meraki=False)
+        page = self.look_up(
+            dict(STANDARD_OTHERS, **{f"{MIST_API}/orgs/{MIST_ORG}/clients/search": FakeResponse(data={"results": []})})
+        )
+        self.assertContains(page, "Mist has not seen this device in the last week.")
+        self.assertContains(page, "Not seen on the network")
+
+    def test_a_network_problem_is_shown_on_the_card(self):
+        self.connect(mist=False)
+        page = self.look_up(dict(STANDARD_OTHERS, **{f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search": FakeResponse(status=401)}))
+        self.assertContains(page, "Meraki: Meraki rejected the API key")
+        self.assertEqual(MerakiConfig.load().state, "Error")
