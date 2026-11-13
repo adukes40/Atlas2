@@ -9,28 +9,50 @@ vendor connections yet.
 
 ## Install
 
-On a fresh Ubuntu Server with Docker and the Compose plugin:
+On a fresh Ubuntu Server (22.04 or newer):
 
 ```
+sudo apt install -y git
 git clone <this repo> /opt/atlas
 cd /opt/atlas
-cp .env.example .env
-nano .env            # set DJANGO_SECRET_KEY, POSTGRES_PASSWORD, DJANGO_ALLOWED_HOSTS
-docker compose up -d --build
-docker compose exec web python manage.py createsuperuser
+sudo ./install.sh
 ```
 
-Then open `http://<server>:8000`.
+The installer:
+
+1. Checks the server and lists everything that needs fixing in one go.
+2. Installs Docker Engine and the Compose plugin from Docker's own package
+   repository, if they are not already there.
+3. Creates `.env` with a fresh secret key and database password, and adds
+   the server's hostname and IP addresses to the names Atlas answers to.
+4. Builds and starts Atlas and its database.
+5. Asks you to create the first administrator.
+6. Prints the address to open in a browser.
+
+To reach Atlas by a DNS name, pass it in: `sudo ./install.sh --host atlas.example.org`.
+To only check the server without changing anything: `sudo ./install.sh --check`.
+
+It is safe to run again. It never replaces a secret that is already set,
+never removes software, and never touches your data.
 
 ## Update
 
 ```
 cd /opt/atlas
 git pull
-docker compose up -d --build
+sudo ./install.sh
 ```
 
-Database changes are applied automatically when the `web` container starts.
+Database changes are applied automatically when Atlas starts.
+
+## Day to day
+
+```
+sudo docker compose logs -f web      # watch the logs
+sudo docker compose down             # stop (data is kept)
+sudo docker compose up -d            # start
+sudo docker compose exec web python manage.py createsuperuser   # add an administrator
+```
 
 ## Develop and test without Docker
 
@@ -57,4 +79,4 @@ switch between Light, Dark and Auto for themselves. A theme is one CSS file in
 
 - Atlas is served over plain HTTP. Put it behind HTTPS before it is used
   outside a trusted network, because sign-in passwords travel unencrypted.
-- Users are created with `createsuperuser` until the Users screen exists.
+- Further users are created with `createsuperuser` until the Users screen exists.
