@@ -78,6 +78,7 @@ class Device(models.Model):
     updates_until = models.DateField(null=True, blank=True)
     google_asset_id = models.CharField(max_length=100, blank=True)
     macs = models.CharField(max_length=40, blank=True)
+    wan_ip = models.CharField(max_length=45, blank=True)
     # Mist
     last_on_network = models.DateTimeField(null=True, blank=True)
     network_place = models.CharField(max_length=200, blank=True)
@@ -87,6 +88,7 @@ class Device(models.Model):
     # Worked out when the copy is rebuilt
     last_seen_anywhere = models.DateTimeField(null=True, blank=True)
     signed_in_by_other = models.BooleanField(default=False)
+    off_network = models.BooleanField(null=True, blank=True)  # by Google's WAN IP and the WAN IP setting
     mismatch = models.CharField(max_length=200, blank=True)
 
     @property

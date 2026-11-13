@@ -8,7 +8,7 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
 ## Layout
 
 - `app/atlas/` project settings and root URLs (routes live in `app/core/urls.py`, which includes `reports/urls.py`)
-- `app/core/` sign-in shell, themes, Organization (single row), Settings, Users
+- `app/core/` sign-in shell, themes, Organization (single row, holds the WAN IP list), Settings, Users
   (Django's own User; superuser means Administrator), System, `/healthz/`
 - `app/devices/` Device 360 page, lookup service, open-lookup tabs, recent lookups, `LookupLog`
 - `app/reports/` Reports: nightly copy (`sync.py`, run by the `sync` compose

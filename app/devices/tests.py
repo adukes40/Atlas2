@@ -2,6 +2,7 @@ import json
 
 import requests
 from django.contrib.auth import get_user_model
+from core.models import Organization
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -342,6 +343,14 @@ class GoogleAndNetworkTests(TestCase):
         ]:
             self.assertContains(page, expected)
         self.assertNotContains(page, "student6@students.example")
+        self.assertNotContains(page, "On our network")  # no WAN IP set up yet
+        organization = Organization.load()
+        organization.wan_ips = "198.51.100.0/24\n203.0.113"
+        organization.save()
+        self.assertContains(self.look_up(), "On our network")
+        organization.wan_ips = "203.0.11"
+        organization.save()
+        self.assertContains(self.look_up(), "Off network")
         # Mist saw it more recently than Meraki, so Mist leads the network card.
         self.assertContains(page, "<b>North Middle School</b>")
         self.assertEqual(GoogleConfig.load().state, "Connected")

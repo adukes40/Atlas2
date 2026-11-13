@@ -201,6 +201,14 @@ class SyncTests(TestCase):
         from .sync import as_of
         self.assertEqual(set(as_of()), {"Google", "Incident IQ", "Mist"})  # Meraki was never connected
 
+    def test_off_network_comes_from_the_wan_ip_setting(self):
+        from core.models import Organization
+        Organization.objects.update_or_create(pk=1, defaults={"wan_ips": "198.51.100"})
+        sync()
+        device = Device.objects.get(serial="7XK2RT3")
+        self.assertEqual((device.wan_ip, device.off_network), ("203.0.113.9", True))
+        self.assertIsNone(Device.objects.get(serial="NOGOOGLE1").off_network)
+
     def test_rate_limits_are_waited_out(self):
         answers = iter([FakeResponse(status=429), google_page(chromebook())])
         with incident_iq(IIQ_ROUTES, others={**others(), GOOGLE_DEVICES_URL: lambda kwargs: next(answers)}), \

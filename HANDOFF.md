@@ -129,7 +129,13 @@ Last updated 2026-11-13 (Reports).
       Google-only run makes no Incident IQ calls and keeps assignments. A
       second request joins one still waiting. "Data as of" is now the oldest
       platform's copy (`sync.as_of()`), and the menu shows each one's time.
-      145 tests.
+    - WAN IP setting (Settings, Organization): one per line, an address, the
+      start of one (`198.51.100` matches `198.51.100.x`, not `198.51.1000`),
+      or a range like `192.0.2.0/24`. `Organization.on_network(ip)`. Device 360
+      tags Google's last WAN IP "On our network" or "Off network". The sync
+      keeps Google's WAN IP (`Device.wan_ip`) and works out `off_network` on
+      every rebuild, so after changing the setting, any Sync now updates it.
+      Filter fields "Last WAN IP" and "Off our network (by WAN IP)". 147 tests.
 
 ## How the three new connections work
 

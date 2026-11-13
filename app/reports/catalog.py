@@ -63,6 +63,8 @@ DEVICE_FIELDS = _fields(
     ("os_behind", "ChromeOS versions behind", "number", GOOGLE),
     ("updates_until", "Updates until", "day", GOOGLE),
     ("google_asset_id", "Google asset ID", "text", GOOGLE),
+    ("wan_ip", "Last WAN IP", "text", GOOGLE),
+    ("off_network", "Off our network (by WAN IP)", "bool", GOOGLE),
     ("last_on_network", "Last on our network", "when", MIST),
     ("network_place", "Network location", "text", MIST),
     ("ssid", "SSID", "text", MIST),

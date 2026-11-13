@@ -19,6 +19,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from core.models import Organization
 from integrations.errors import IntegrationError
 from integrations.google.normalize import normalize_chromebook
 from integrations.incidentiq.normalize import normalize_asset, normalize_user
@@ -318,7 +319,7 @@ def _cut(value, field):
 
 IIQ_FIELDS = ["serial", "in_iiq", "iiq_asset_id", "asset_tag", "model", "category", "iiq_status", "iiq_location", "owner_id"]
 GOOGLE_FIELDS = ["in_google", "google_status", "org_unit", "last_sync", "recent_user", "google_model", "os_version",
-                 "updates_until", "google_asset_id", "macs"]
+                 "updates_until", "google_asset_id", "macs", "wan_ip"]
 PERSON_FIELDS = ["user_id", "name", "email", "school_id", "role", "grade", "school", "active", "fee_balance", "fee_past_due"]
 
 
@@ -397,9 +398,11 @@ def _google_into(devices, google):
         device.updates_until = book.updates_until
         device.google_asset_id = _cut(book.asset_id, "google_asset_id")
         device.macs = _cut(",".join(book.macs), "macs")
+        device.wan_ip = _cut(book.wan_ip, "wan_ip")
 
 
 def _finish(devices, persons, google_on):
+    organization = Organization.load()
     newest = max((_major(d.os_version) or 0 for d in devices.values()), default=0)
     sightings = Sighting.objects.in_bulk(field_name="mac")
     for device in devices.values():
@@ -417,6 +420,8 @@ def _finish(devices, persons, google_on):
             device.recent_user and owner and owner.email and device.recent_user.lower() != owner.email.lower()
         )
         device.mismatch = _cut("; ".join(_mismatches(device, google_on)), "mismatch")
+        on = organization.on_network(device.wan_ip)
+        device.off_network = None if on is None else not on
         if owner:
             owner.devices += 1
             owner.chromebooks += device.in_google

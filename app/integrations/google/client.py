@@ -30,7 +30,7 @@ FIELDS = (
 # The nightly copy for Reports: no memory or disk reports, which are large.
 SYNC_FIELDS = (
     "chromeosdevices(deviceId,serialNumber,status,orgUnitPath,lastSync,recentUsers(email),macAddress,"
-    "ethernetMacAddress,model,osVersion,annotatedAssetId,autoUpdateThrough)"
+    "ethernetMacAddress,model,osVersion,annotatedAssetId,autoUpdateThrough,lastKnownNetwork)"
 )
 
 # Access tokens last an hour. Keep one per process so a lookup does not sign in every time.
