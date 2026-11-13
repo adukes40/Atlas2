@@ -118,14 +118,16 @@ def lookup(query):
 
 
 def _add_tickets(client, device, result):
-    """List the open tickets. Only asked when Incident IQ says there are some;
-    a failure leaves the count showing, never sinks the lookup."""
-    if not device.open_tickets or not device.asset_id:
+    """List the open tickets. Incident IQ's own count on the asset misses
+    tickets filed under the person, so the list's length wins when larger.
+    A failure leaves the count showing, never sinks the lookup."""
+    if not device.asset_id or not device.owner or not device.owner.user_id:
         return
     try:
-        device.tickets = [normalize_ticket(raw) for raw in client.open_tickets(device.asset_id)]
+        device.tickets = [normalize_ticket(raw) for raw in client.open_tickets(device.asset_id, device.owner.user_id)]
     except IncidentIQError as error:
         result.tickets_message = str(error)
+    device.open_tickets = max(device.open_tickets, len(device.tickets))
 
 
 def _ask(config, part, question):
