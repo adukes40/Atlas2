@@ -45,10 +45,11 @@ def asset(**changes):
 
 
 class FakeResponse:
-    def __init__(self, status=200, data=None, text=None):
+    def __init__(self, status=200, data=None, text=None, next_url=""):
         self.status_code = status
         self._data = data
         self._text = text
+        self.links = {"next": {"url": next_url}} if next_url else {}
 
     def json(self):
         if self._text is not None:

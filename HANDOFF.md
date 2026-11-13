@@ -93,6 +93,30 @@ Last updated 2026-11-13 (Reports).
     Inventory mismatches was dropped as a report the same day (Austin: "those
     can go away"). The `mismatch` field is still worked out each sync, so it
     can be filtered on from any device report or brought back as a report.
+13. Network gear (2026-11-13). Layout "A plus B", picked by Austin from three
+    mockups: a Network gear group of 9 reports (Access points, Access points
+    offline, Switches, Switch ports, Devices on switch ports, Ports with
+    errors, Firmware versions, Wireless networks, Personal Wi-Fi keys), plus a
+    switch page (`reports/switch/<serial>/`) drawn like the faceplate, odd
+    ports on top, with the chosen port's settings and what is plugged in.
+    Switch names in the reports link to it.
+    - The nightly sync adds two steps. "Meraki": networks, device
+      availabilities, devices (switches and MR APs), and per-switch port
+      config, port status and LLDP/CDP neighbors, all org-wide lists paged by
+      Meraki's Link header (`get_json(link=True)`, `MerakiClient.org_list`),
+      about 35 calls. "Mist access points": sites, `/stats/devices?type=ap`,
+      wlans and psks (`MistClient.org_list`), about 5 calls. Each step replaces
+      only its own rows (`NetDevice` by vendor, `SwitchPort`, `Wlan`, `Psk`),
+      so a failed system keeps yesterday's rows and Chromebook reports still
+      rebuild.
+    - `link_gear()` puts each AP on its switch port: the Meraki port whose
+      LLDP chassis MAC is the AP's MAC, else the switch and port the Mist AP
+      reports itself (`lldp_stat`, for non-Meraki switches). The port's
+      neighbor name is then set to the AP's name (Meraki often only has its MAC).
+    - PSK passphrases are never read into Atlas; only name, SSID, role, VLAN
+      and expiry.
+    - Meraki MR APs are included (Austin had not said whether they are
+      retiring); filter Vendor to drop them. 141 tests.
 
 ## How the three new connections work
 
@@ -122,9 +146,13 @@ Last updated 2026-11-13 (Reports).
   in "Lost but still online" (lost, stolen, missing, retired, dispos), role
   "Student", and "student" OU / "staff" policy in "Wrong network" are
   guesses the chips let anyone change.
-- Meraki is not in the nightly copy: Chromebooks are on Mist Wi-Fi, and
-  Meraki's network client list pages by Link headers that `get_json` does
-  not expose.
+- Meraki Wi-Fi clients are not in the nightly copy: Chromebooks are on Mist
+  Wi-Fi. Meraki's switches, ports and APs are (item 13).
+- Network gear against the live systems. Meraki's port config, status and
+  LLDP shapes and Mist's AP, wlan shapes were read live on 2026-11-13; Mist's
+  `num_clients` and `lldp_stat` in the org device stats, and the PSK list
+  fields, are from the API docs. Meraki per-port PoE watts are not in the
+  org-wide status list, so PoE draw shows only for Mist APs.
 
 - Open tickets (confirmed on the live site 2026-11-13): Incident IQ files
   tickets under the person, its `OpenTickets`/`HasOpenTickets` on the asset

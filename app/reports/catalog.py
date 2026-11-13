@@ -1,7 +1,7 @@
 """Every report, every field a report can filter on, and how a filter becomes a query.
 
-A report is a starting set of filters on one of three tables (devices,
-people, lookups). Anyone can add, change or remove a filter on any field,
+A report is a starting set of filters on one table (devices, people,
+lookups, network gear, switch ports, wireless networks, personal keys). Anyone can add, change or remove a filter on any field,
 so "filter on anything" and the fixed reports are the same thing.
 
 Filters travel in the page address as `f=<field>.<op>.<value>`.
@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from devices.models import LookupLog
 
-from .models import Device, Person
+from .models import Device, NetDevice, Person, Psk, SwitchPort, Wlan
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,8 @@ def _fields(*rows):
     return {key: Field(key, label, kind, system) for key, label, kind, system in rows}
 
 
-IIQ, GOOGLE, MIST, ATLAS = "Incident IQ", "Google", "Mist", "Atlas"
+IIQ, GOOGLE, MIST, MERAKI, ATLAS = "Incident IQ", "Google", "Mist", "Meraki", "Atlas"
+BOTH = "Meraki and Mist"
 
 DEVICE_FIELDS = _fields(
     ("asset_tag", "Asset tag", "text", IIQ),
@@ -95,10 +96,78 @@ LOOKUP_FIELDS = _fields(
     ("label", "Turned out to be", "text", ATLAS),
 )
 
+GEAR_FIELDS = _fields(
+    ("name", "Name", "text", BOTH),
+    ("kind", "Type", "text", BOTH),
+    ("vendor", "Vendor", "text", BOTH),
+    ("model", "Model", "text", BOTH),
+    ("serial", "Serial", "text", BOTH),
+    ("mac", "MAC", "text", BOTH),
+    ("site", "Site", "text", BOTH),
+    ("ip", "IP address", "text", BOTH),
+    ("status", "Status", "text", BOTH),
+    ("firmware", "Firmware", "text", BOTH),
+    ("clients", "Clients", "number", MIST),
+    ("last_seen", "Last seen", "when", MIST),
+    ("poe_draw", "PoE draw (W)", "number", MIST),
+    ("ports_up", "Ports up", "number", MERAKI),
+    ("ports_total", "Ports", "number", MERAKI),
+    ("uplink_switch", "Switch", "text", BOTH),
+    ("uplink_port", "Switch port", "text", BOTH),
+    ("port_mode", "Port mode", "text", MERAKI),
+    ("port_vlan", "Port VLAN", "text", MERAKI),
+)
+
+PORT_FIELDS = _fields(
+    ("switch_name", "Switch", "text", MERAKI),
+    ("site", "Site", "text", MERAKI),
+    ("port_id", "Port", "text", MERAKI),
+    ("name", "Port name", "text", MERAKI),
+    ("enabled", "Enabled", "bool", MERAKI),
+    ("link", "Link", "text", MERAKI),
+    ("speed", "Speed", "text", MERAKI),
+    ("uplink", "Uplink", "bool", MERAKI),
+    ("mode", "Mode", "text", MERAKI),
+    ("vlan", "VLAN", "text", MERAKI),
+    ("voice_vlan", "Voice VLAN", "text", MERAKI),
+    ("allowed_vlans", "Allowed VLANs", "text", MERAKI),
+    ("poe", "PoE on", "bool", MERAKI),
+    ("poe_in_use", "Drawing PoE", "bool", MERAKI),
+    ("stp_guard", "STP guard", "text", MERAKI),
+    ("access_policy", "Access policy", "text", MERAKI),
+    ("problems", "Errors and warnings", "text", MERAKI),
+    ("neighbor", "Plugged in", "text", MERAKI),
+    ("neighbor_kind", "Plugged-in type", "text", MERAKI),
+    ("neighbor_model", "Plugged-in model", "text", MERAKI),
+    ("neighbor_ip", "Plugged-in IP", "text", MERAKI),
+)
+
+WLAN_FIELDS = _fields(
+    ("ssid", "SSID", "text", MIST),
+    ("enabled", "Enabled", "bool", MIST),
+    ("security", "Security", "text", MIST),
+    ("vlan", "VLAN", "text", MIST),
+    ("bands", "Bands", "text", MIST),
+    ("scope", "Where", "text", MIST),
+    ("psks", "Personal keys", "number", MIST),
+)
+
+PSK_FIELDS = _fields(
+    ("name", "Name", "text", MIST),
+    ("ssid", "SSID", "text", MIST),
+    ("role", "Role", "text", MIST),
+    ("vlan", "VLAN", "text", MIST),
+    ("expires", "Expires", "when", MIST),
+)
+
 BASES = {
-    "devices": (DEVICE_FIELDS, lambda: Device.objects.select_related("owner"), "devices"),
-    "people": (PEOPLE_FIELDS, lambda: Person.objects.all(), "people"),
-    "lookups": (LOOKUP_FIELDS, lambda: LookupLog.objects.select_related("user"), "lookups"),
+    "devices": (DEVICE_FIELDS, lambda: Device.objects.select_related("owner"), ("device", "devices")),
+    "people": (PEOPLE_FIELDS, lambda: Person.objects.all(), ("person", "people")),
+    "lookups": (LOOKUP_FIELDS, lambda: LookupLog.objects.select_related("user"), ("lookup", "lookups")),
+    "gear": (GEAR_FIELDS, lambda: NetDevice.objects.all(), ("device", "devices")),
+    "ports": (PORT_FIELDS, lambda: SwitchPort.objects.all(), ("port", "ports")),
+    "wlans": (WLAN_FIELDS, lambda: Wlan.objects.all(), ("network", "networks")),
+    "psks": (PSK_FIELDS, lambda: Psk.objects.all(), ("key", "keys")),
 }
 
 # What each kind of field can be filtered by. The label reads after the field
@@ -212,6 +281,11 @@ class Report:
     def fields(self):
         return BASES[self.base][0]
 
+    @property
+    def noun(self):
+        """What one row is called, and many."""
+        return BASES[self.base][2]
+
     def default_filters(self):
         return [parse_filter(self.fields, token) for token in self.filters]
 
@@ -245,6 +319,7 @@ G = {
     "money": "Money",
     "life": "Lifecycle",
     "network": "Network",
+    "gear": "Network gear",
     "atlas": "Atlas",
 }
 
@@ -338,6 +413,67 @@ REPORTS = [
         "devices", ("last_on_network.within.1",),
         DEVICE_COLUMNS + ("network_place", "ssid", "last_on_network"), "network_place",
         group_by="network_place",
+    ),
+    Report(
+        "access-points", "Access points", G["gear"],
+        "Every Mist and Meraki access point, with the switch port it is plugged into and that port's settings.",
+        "gear", ("kind.is.Access point",),
+        ("name", "vendor", "model", "status", "clients", "site", "uplink_switch", "uplink_port", "port_mode",
+         "port_vlan", "poe_draw", "firmware"), "name",
+        note="The switch port comes from Meraki's neighbor list, or from what a Mist access point reports when the switch isn't a Meraki one.",
+    ),
+    Report(
+        "aps-offline", "Access points offline", G["gear"],
+        "Access points Mist or Meraki doesn't have online, and where they plug in.",
+        "gear", ("kind.is.Access point", "status.not.Online"),
+        ("name", "vendor", "model", "status", "site", "last_seen", "uplink_switch", "uplink_port"), "site",
+    ),
+    Report(
+        "switches", "Switches", G["gear"],
+        "Every Meraki switch, how many of its ports are up, and its firmware. Click a switch to see its ports.",
+        "gear", ("kind.is.Switch",),
+        ("name", "model", "site", "status", "ip", "ports_up", "ports_total", "firmware"), "name",
+    ),
+    Report(
+        "switch-ports", "Switch ports", G["gear"],
+        "Every Meraki switch port: its settings, its link, and what is plugged in.",
+        "ports", (),
+        ("switch_name", "port_id", "name", "link", "speed", "mode", "vlan", "allowed_vlans", "poe", "neighbor",
+         "neighbor_kind"), "switch_name",
+    ),
+    Report(
+        "plugged-in", "Devices on switch ports", G["gear"],
+        "Access points, cameras, phones and switches each switch port sees, by type.",
+        "ports", ("neighbor.set.",),
+        ("switch_name", "port_id", "neighbor", "neighbor_kind", "neighbor_model", "neighbor_ip", "mode", "vlan",
+         "poe_in_use"), "switch_name",
+        group_by="neighbor_kind",
+        note="Read from what each device announces on the port (LLDP or CDP). A device that announces nothing isn't listed.",
+    ),
+    Report(
+        "port-errors", "Ports with errors", G["gear"],
+        "Switch ports Meraki reports errors or warnings on, such as CRC errors or PoE over budget.",
+        "ports", ("problems.set.",),
+        ("switch_name", "port_id", "problems", "link", "speed", "neighbor", "neighbor_kind"), "switch_name",
+    ),
+    Report(
+        "firmware", "Firmware versions", G["gear"],
+        "Which firmware every switch and access point runs. Group by model or site to compare.",
+        "gear", (),
+        ("name", "kind", "vendor", "model", "site", "firmware", "status"), "firmware",
+        group_by="firmware",
+    ),
+    Report(
+        "wireless-networks", "Wireless networks", G["gear"],
+        "Every Mist wireless network: on or off, how it signs people in, its VLAN and bands.",
+        "wlans", (),
+        ("ssid", "enabled", "security", "vlan", "bands", "scope", "psks"), "ssid",
+    ),
+    Report(
+        "personal-keys", "Personal Wi-Fi keys", G["gear"],
+        "Who has a Mist personal key, for which network, with which role. The keys themselves are not copied.",
+        "psks", (),
+        ("name", "ssid", "role", "vlan", "expires"), "ssid",
     ),
     Report(
         "lookups", "Lookup activity", G["atlas"],

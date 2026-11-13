@@ -10,7 +10,7 @@ import requests
 from django.core.cache import cache
 
 from ..errors import IntegrationError
-from ..http import get_json
+from ..http import TIMEOUT, get_json
 
 API = "https://api.meraki.com/api/v1"
 
@@ -24,16 +24,21 @@ class MerakiClient:
         self.org_id = org_id
         self._key = key
         self._session = session or requests.Session()
+        self.timeout = TIMEOUT  # the nightly sync allows longer for big pages, and retries
+        self.retries = 0
 
-    def _get(self, path, params=None):
+    def _get(self, path, params=None, link=False):
         return get_json(
             self._session,
-            f"{API}{path}",
+            path if path.startswith("https://") else f"{API}{path}",
             system="Meraki",
             error=MerakiError,
             rejected="Meraki rejected the API key, or API access is off for the organization.",
             headers={"Authorization": f"Bearer {self._key}", "Accept": "application/json"},
             params=params,
+            timeout=self.timeout,
+            retries=self.retries,
+            link=link,
         )
 
     def check(self):
@@ -76,3 +81,14 @@ class MerakiClient:
 
     def group_policies(self, network_id):
         return self._get(f"/networks/{quote(network_id, safe='')}/groupPolicies") or []
+
+    def org_list(self, what, params=None):
+        """Every item of an organization-wide list such as "devices" or
+        "switch/ports/bySwitch", following Meraki's next-page links."""
+        url = f"/organizations/{quote(self.org_id, safe='')}/{what}"
+        while url:
+            data, url = self._get(url, params, link=True)
+            params = None  # the next-page address carries them
+            if isinstance(data, dict):
+                data = data.get("items")
+            yield from (item for item in data or [] if isinstance(item, dict))

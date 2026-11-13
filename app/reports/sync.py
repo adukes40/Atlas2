@@ -3,6 +3,8 @@
 Atlas asks Google for every Chromebook, Incident IQ for every asset and
 person, and Mist for every Wi-Fi client seen in the last day, then rebuilds
 the Device and Person tables in one step, so a report never sees half a copy.
+Meraki's switches, ports and access points and Mist's access points and
+wireless networks are copied the same way, each system's rows on their own.
 
 If Google or Incident IQ fails, yesterday's copy stays as it was. If Mist
 fails, the copy is rebuilt with the Wi-Fi sightings Atlas already had.
@@ -20,10 +22,12 @@ from django.utils import timezone
 from integrations.errors import IntegrationError
 from integrations.google.normalize import normalize_chromebook
 from integrations.incidentiq.normalize import normalize_asset, normalize_user
-from integrations.models import GoogleConfig, IncidentIQConfig, MistConfig
+from integrations.meraki.normalize import normalize_gear, normalize_ports
+from integrations.mist.normalize import normalize_ap, normalize_psk, normalize_wlan
+from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
 from integrations.network import mac_plain
 
-from .models import DailyCount, Device, Person, Sighting, SyncRun
+from .models import DailyCount, Device, NetDevice, Person, Psk, Sighting, SwitchPort, SyncRun, Wlan
 
 log = logging.getLogger("atlas.sync")
 
@@ -71,6 +75,9 @@ def collect_and_rebuild():
     for raw in (google or {}).values():
         macs.update(m for m in (mac_plain(raw.get(k)) for k in ("macAddress", "ethernetMacAddress")) if m)
     _step(results, "Mist", MistConfig, lambda client: _mist(client, macs))
+    _step(results, "Meraki", MerakiConfig, _meraki_gear)
+    _step(results, "Mist access points", MistConfig, _mist_gear)
+    link_gear()
     if google is None or iiq is None:
         return results, False
     started = time.monotonic()
@@ -158,6 +165,102 @@ def _mist(client, macs):
         update_fields=["last_seen", "place", "ssid", "policy", "vlan"],
     )
     return None, f"{len(latest):,} Chromebooks seen on Wi-Fi in the last day"
+
+
+def _meraki_gear(client):
+    if not client.org_id:
+        client.org_id = client.check()[0]
+    networks = {str(n.get("id")): str(n.get("name") or "") for n in client.org_list("networks", {"perPage": 100000})}
+    kinds = {"productTypes[]": ["switch", "wireless"]}
+    status = {d.get("serial"): d.get("status") for d in client.org_list("devices/availabilities", {**kinds, "perPage": 1000})}
+    gear = {}
+    for raw in client.org_list("devices", {**kinds, "perPage": 1000}):
+        row = normalize_gear(raw, status.get(raw.get("serial"), ""), networks)
+        if row["mac"]:
+            gear[row["mac"]] = NetDevice(**_fit(NetDevice, row))
+    statuses = {s.get("serial"): s for s in client.org_list("switch/ports/statuses/bySwitch", {"perPage": 20})}
+    neighbors = {s.get("serial"): s for s in client.org_list("switch/ports/topology/discovery/byDevice", {"perPage": 20})}
+    ports = []
+    for config in client.org_list("switch/ports/bySwitch", {"perPage": 50}):
+        serial = config.get("serial")
+        ports += [SwitchPort(**_fit(SwitchPort, row)) for row in normalize_ports(config, statuses.get(serial), neighbors.get(serial))]
+    by_switch = {}
+    for port in ports:
+        by_switch.setdefault(port.switch_serial, []).append(port)
+    for device in gear.values():
+        mine = by_switch.get(device.serial)
+        if mine:
+            device.ports_total, device.ports_up = len(mine), sum(p.link == "Connected" for p in mine)
+    with transaction.atomic():
+        NetDevice.objects.filter(vendor="Meraki").delete()
+        SwitchPort.objects.all().delete()
+        NetDevice.objects.bulk_create(_new(gear), batch_size=1000)
+        SwitchPort.objects.bulk_create(ports, batch_size=1000)
+    switches = sum(d.kind == "Switch" for d in gear.values())
+    return None, f"{switches:,} switches, {len(gear) - switches:,} access points, {len(ports):,} ports"
+
+
+def _mist_gear(client):
+    sites = {str(s.get("id")): str(s.get("name") or "") for s in client.org_list("sites")}
+    gear = {}
+    for raw in client.org_list("stats/devices", {"type": "ap"}):
+        row = normalize_ap(raw, sites)
+        if row["mac"]:
+            gear[row["mac"]] = NetDevice(**_fit(NetDevice, row))
+    psks = [Psk(**_fit(Psk, normalize_psk(raw))) for raw in client.org_list("psks")]
+    keys_per_ssid = {}
+    for psk in psks:
+        keys_per_ssid[psk.ssid] = keys_per_ssid.get(psk.ssid, 0) + 1
+    wlans = [Wlan(**_fit(Wlan, normalize_wlan(raw, sites))) for raw in client.org_list("wlans")]
+    for wlan in wlans:
+        wlan.psks = keys_per_ssid.get(wlan.ssid, 0)
+    with transaction.atomic():
+        NetDevice.objects.filter(vendor="Mist").delete()
+        Wlan.objects.all().delete()
+        Psk.objects.all().delete()
+        NetDevice.objects.bulk_create(_new(gear), batch_size=1000)
+        Wlan.objects.bulk_create(wlans)
+        Psk.objects.bulk_create(psks, batch_size=1000)
+    return None, f"{len(gear):,} access points, {len(wlans):,} wireless networks, {len(psks):,} personal keys"
+
+
+def _fit(model, row):
+    """The row with text cut to fit each column."""
+    for name, value in row.items():
+        size = getattr(model._meta.get_field(name), "max_length", None)
+        if size and isinstance(value, str):
+            row[name] = value[:size]
+    return row
+
+
+def _new(gear):
+    """Gear whose MAC the other system has not already claimed."""
+    taken = set(NetDevice.objects.filter(mac__in=list(gear)).values_list("mac", flat=True))
+    return [d for mac, d in gear.items() if mac not in taken]
+
+
+def link_gear():
+    """Put each access point on its switch port: Meraki's neighbor list first,
+    else the switch and port the access point reports itself."""
+    ports = list(SwitchPort.objects.all())
+    by_mac = {p.neighbor_mac: p for p in ports if p.neighbor_mac}
+    by_name = {(p.switch_name.lower(), p.port_id): p for p in ports}
+    aps = list(NetDevice.objects.filter(kind="Access point"))
+    named = []
+    for ap in aps:
+        port = by_mac.get(ap.mac) or by_name.get((ap.reported_switch.lower(), ap.reported_port))
+        if port:
+            ap.uplink_switch, ap.uplink_serial, ap.uplink_port = port.switch_name, port.switch_serial, port.port_id
+            ap.port_mode, ap.port_vlan = port.mode, port.vlan
+            if port.neighbor != ap.name:
+                port.neighbor, port.neighbor_kind, port.neighbor_mac = ap.name, "Access point", ap.mac
+                named.append(port)
+        else:
+            ap.uplink_switch, ap.uplink_port = ap.reported_switch, ap.reported_port
+            ap.uplink_serial = ap.port_mode = ap.port_vlan = ""
+    fields = ["uplink_switch", "uplink_serial", "uplink_port", "port_mode", "port_vlan"]
+    NetDevice.objects.bulk_update(aps, fields, batch_size=1000)
+    SwitchPort.objects.bulk_update(named, ["neighbor", "neighbor_kind", "neighbor_mac"], batch_size=1000)
 
 
 def _text(value):

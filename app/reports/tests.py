@@ -11,13 +11,15 @@ from django.utils import timezone
 
 from devices.models import LookupLog
 from integrations.google import client as google_client
-from integrations.models import GoogleConfig, IncidentIQConfig, MistConfig
+from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
 from integrations.testing import (
     BASE,
     GOOGLE_ADMIN,
     GOOGLE_DEVICES_URL,
     GOOGLE_KEY,
     GOOGLE_TOKEN_URL,
+    MERAKI_API,
+    MERAKI_ORG,
     MIST_API,
     MIST_ORG,
     MIST_SITE,
@@ -34,7 +36,7 @@ from integrations.testing import (
 from . import catalog
 from .catalog import BY_SLUG, DEVICE_FIELDS, REPORTS, parse_filter
 from .management.commands.run_sync_schedule import nightly_due
-from .models import DailyCount, Device, Person, SavedReport, Sighting, SyncRun
+from .models import DailyCount, Device, NetDevice, Person, Psk, SavedReport, Sighting, SwitchPort, SyncRun, Wlan
 from .sync import _pages, execute, request_sync, run_pending
 
 User = get_user_model()
@@ -300,3 +302,147 @@ class PageTests(TestCase):
         self.client.post(reverse("sync-now"), {"next": reverse("reports")})
         self.assertEqual(SyncRun.objects.filter(state=SyncRun.REQUESTED, requested_by="tech").count(), 1)
         self.assertContains(self.client.get(reverse("reports")), "Syncing")
+
+
+# Network gear. Made-up names, serials and addresses.
+ORG = f"{MERAKI_API}/organizations/{MERAKI_ORG}"
+SWITCH = {"name": "North-MDF", "serial": "Q2GW-0000-0001", "mac": "ac:17:c8:00:00:01",
+          "network": {"id": "N_1", "name": "North-switch"}, "model": "MS225-48FP"}
+MIST_AP_MAC = "7cb68d000001"
+LLDP_AP = [{"name": "System name", "value": "7cb68d000001"},
+           {"name": "System description", "value": "Mist Systems 802.11ax Access Point."},
+           {"name": "Chassis ID", "value": "7c:b6:8d:00:00:01"}, {"name": "Management address", "value": "10.1.8.3"}]
+LLDP_CAMERA = [{"name": "System name", "value": "axis-accc8e000001"},
+               {"name": "System description", "value": "AXIS M3047-P Network Camera 8.40"},
+               {"name": "Chassis ID", "value": "ac:cc:8e:00:00:01"}]
+
+
+def gear_routes(meraki=None):
+    port = {"enabled": True, "poeEnabled": True, "type": "access", "vlan": 196, "voiceVlan": None, "allowedVlans": "all",
+            "stpGuard": "disabled", "accessPolicyType": "Open"}
+    return {
+        f"{ORG}/networks": FakeResponse(data=[{"id": "N_1", "name": "North-switch"}]),
+        f"{ORG}/devices/availabilities": FakeResponse(data=[{"serial": SWITCH["serial"], "status": "online"},
+                                                           {"serial": "Q2EK-0000-0002", "status": "offline"}]),
+        # Two pages, joined by Meraki's next-page link.
+        f"{ORG}/devices": meraki or FakeResponse(
+            data=[{**SWITCH, "productType": "switch", "networkId": "N_1", "lanIp": "10.1.252.2",
+                   "firmware": "switch-17-2-1", "url": "https://n1.meraki.com/North-switch/n/x/manage/nodes/new_list/1"}],
+            next_url=f"{ORG}/devices?startingAfter=1"),
+        f"{ORG}/devices?startingAfter=1": FakeResponse(data=[
+            {"name": "North-MR-1", "serial": "Q2EK-0000-0002", "mac": "e0:cb:bc:00:00:02", "productType": "wireless",
+             "networkId": "N_1", "model": "MR42"}]),
+        f"{ORG}/switch/ports/bySwitch": FakeResponse(data=[{**SWITCH, "ports": [
+            {**port, "portId": "1"},
+            {**port, "portId": "2"},
+            {**port, "portId": "20", "type": "trunk", "vlan": 1, "allowedVlans": "1,255,355"},
+            {**port, "portId": "21", "enabled": False},
+        ]}]),
+        f"{ORG}/switch/ports/statuses/bySwitch": FakeResponse(data={"items": [{**SWITCH, "ports": [
+            {"portId": "1", "status": "Connected", "speed": "100 Mbps", "errors": [], "warnings": [], "poe": {"isAllocated": True}},
+            {"portId": "2", "status": "Disconnected", "errors": ["Port disconnected"], "warnings": []},
+            {"portId": "20", "status": "Connected", "speed": "1 Gbps", "errors": ["CRC errors"], "warnings": [],
+             "poe": {"isAllocated": True}},
+        ]}]}),
+        f"{ORG}/switch/ports/topology/discovery/byDevice": FakeResponse(data={"items": [{**SWITCH, "ports": [
+            {"portId": "1", "lldp": LLDP_CAMERA, "cdp": []},
+            {"portId": "20", "lldp": LLDP_AP, "cdp": []},
+        ]}]}),
+        f"{MIST_API}/orgs/{MIST_ORG}/sites": FakeResponse(data=[{"id": MIST_SITE, "name": "North Middle School"}]),
+        f"{MIST_API}/orgs/{MIST_ORG}/stats/devices": FakeResponse(data=[
+            {"name": "NMS-AP-3", "mac": MIST_AP_MAC, "model": "AP45", "status": "connected", "site_id": MIST_SITE,
+             "num_clients": 2, "version": "0.12.27458",
+             "lldp_stat": {"system_name": "North-MDF", "port_id": "Port 20", "power_draw": 23.14}},
+            # Plugged into a switch Meraki doesn't manage: only what the AP reports.
+            {"name": "NMS-AP-9", "mac": "7cb68d000009", "model": "AP45", "status": "disconnected", "site_id": MIST_SITE,
+             "lldp_stat": {"system_name": "core-3850", "port_id": "Gi1/0/4"}},
+        ]),
+        f"{MIST_API}/orgs/{MIST_ORG}/wlans": FakeResponse(data=[
+            {"ssid": "CR-PSK", "enabled": True, "auth": {"type": "psk", "multi_psk_only": True}, "vlan_id": 355,
+             "bands": ["24", "5"], "site_id": "00000000-0000-0000-0000-000000000000"},
+            {"ssid": "CR-Old", "enabled": False, "auth": {"type": "eap"}, "bands": ["5"], "site_id": MIST_SITE},
+        ]),
+        f"{MIST_API}/orgs/{MIST_ORG}/psks": FakeResponse(data=[
+            {"name": "teacher@example.org", "ssid": "CR-PSK", "role": "StaffBYOD", "vlan_id": 355,
+             "passphrase": "do-not-copy-this", "expire_time": 0},
+        ]),
+    }
+
+
+def connect_meraki():
+    meraki = MerakiConfig.load()
+    meraki.org_id = MERAKI_ORG
+    meraki.set_token("meraki-key")
+    meraki.save()
+
+
+def gear_sync(**changes):
+    with incident_iq(IIQ_ROUTES, others={**others(), **gear_routes(**changes)}), mock.patch("integrations.http.time.sleep"):
+        return execute(SyncRun.objects.create())
+
+
+@override_settings(ATLAS_ENCRYPTION_KEY=TEST_KEY)
+class NetworkGearTests(TestCase):
+    def setUp(self):
+        google_client._tokens.clear()
+        cache.clear()
+        connect()
+        connect_meraki()
+
+    def test_switches_ports_and_access_points_are_copied_and_joined(self):
+        run = gear_sync()
+        self.assertTrue(run.results["Meraki"]["ok"], run.results)
+        self.assertEqual(run.results["Meraki"]["detail"], "1 switches, 1 access points, 4 ports")
+        self.assertEqual(run.results["Mist access points"]["detail"], "2 access points, 2 wireless networks, 1 personal keys")
+
+        switch = NetDevice.objects.get(kind="Switch")
+        self.assertEqual((switch.status, switch.site, switch.ports_up, switch.ports_total), ("Online", "North-switch", 2, 4))
+        self.assertEqual(NetDevice.objects.get(serial="Q2EK-0000-0002").status, "Offline")
+
+        # Meraki's neighbor list puts the Mist AP on port 20, with that port's settings.
+        ap = NetDevice.objects.get(mac=MIST_AP_MAC)
+        self.assertEqual((ap.uplink_switch, ap.uplink_port, ap.port_mode, ap.port_vlan), ("North-MDF", "20", "Trunk", "1"))
+        self.assertEqual((ap.status, ap.clients, ap.poe_draw, ap.site), ("Online", 2, 23.1, "North Middle School"))
+        port = SwitchPort.objects.get(port_id="20")
+        self.assertEqual((port.neighbor, port.neighbor_kind, port.problems), ("NMS-AP-3", "Access point", "CRC errors"))
+        self.assertEqual(SwitchPort.objects.get(port_id="1").neighbor_kind, "Camera")
+        self.assertEqual(SwitchPort.objects.get(port_id="21").link, "Disabled")
+        # Not a Meraki switch: what the AP reports is all there is.
+        other = NetDevice.objects.get(mac="7cb68d000009")
+        self.assertEqual((other.uplink_switch, other.uplink_port, other.port_mode, other.status), ("core-3850", "Gi1/0/4", "", "Offline"))
+
+        psk = Wlan.objects.get(ssid="CR-PSK")
+        self.assertEqual((psk.security, psk.vlan, psk.bands, psk.scope, psk.psks), ("Personal keys", "355", "2.4, 5 GHz", "Whole district", 1))
+        self.assertEqual(Wlan.objects.get(ssid="CR-Old").scope, "North Middle School")
+        key = Psk.objects.get()
+        self.assertEqual((key.name, key.role, key.expires), ("teacher@example.org", "StaffBYOD", None))
+        self.assertNotIn("do-not-copy-this", json.dumps(list(Psk.objects.values()), default=str))
+
+    def test_a_meraki_failure_keeps_yesterdays_meraki_gear(self):
+        gear_sync()
+        run = gear_sync(meraki=FakeResponse(status=500))
+        self.assertFalse(run.results["Meraki"]["ok"])
+        self.assertEqual(run.state, SyncRun.DONE)  # Chromebook reports still rebuilt
+        self.assertEqual(NetDevice.objects.filter(vendor="Meraki").count(), 2)
+        self.assertEqual(SwitchPort.objects.count(), 4)
+        self.assertEqual(NetDevice.objects.get(mac=MIST_AP_MAC).uplink_port, "20")
+
+    def test_the_gear_reports_and_switch_page_open(self):
+        gear_sync()
+        tech = User.objects.create_user("tech", password="x")
+        self.client.force_login(tech)
+        switch_url = reverse("switch", args=[SWITCH["serial"]])
+        aps = self.client.get(reverse("report", args=["access-points"]))
+        self.assertContains(aps, "NMS-AP-3")
+        self.assertContains(aps, f'href="{switch_url}"')
+        self.assertContains(aps, "3 devices")
+        self.assertContains(self.client.get(reverse("report", args=["plugged-in"])), "Camera")
+        self.assertContains(self.client.get(reverse("report", args=["switch-ports"])), "4 ports")
+        page = self.client.get(switch_url)
+        self.assertContains(page, "Port 20")  # the first AP's port is shown first
+        self.assertContains(page, "Trunk, native VLAN 1")
+        self.assertContains(page, "drawing 23.1 W")
+        self.assertContains(page, "Open in Meraki")
+        self.assertContains(self.client.get(switch_url, {"port": "1"}), "AXIS M3047-P")
+        self.assertEqual(self.client.get(reverse("switch", args=["NOPE"])).status_code, 404)
+        self.assertEqual(catalog.count(BY_SLUG["aps-offline"]), 2)

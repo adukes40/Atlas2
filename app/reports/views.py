@@ -13,7 +13,7 @@ from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
-from .models import DailyCount, SavedReport, SyncRun
+from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
 from .sync import request_sync, sync_zone
 
 PAGE_SIZE = 100
@@ -122,11 +122,20 @@ def _raw(value, kind):
 LINKED = {"asset_tag", "serial", "query"}
 
 
-def _lookup_link(row, column):
-    """Device 360 for this row's device, from its tag, serial or search."""
-    if column not in LINKED or not _value(row, column):
+def _link(report, row, column):
+    """Device 360 for a Chromebook's tag, serial or search; the switch page
+    for a switch's name."""
+    if report.base == "ports" and column == "switch_name":
+        serial = row.switch_serial
+    elif report.base == "gear" and column == "uplink_switch":
+        serial = row.uplink_serial
+    elif report.base == "gear" and column == "name" and row.kind == "Switch":
+        serial = row.serial
+    elif report.base in ("devices", "lookups") and column in LINKED and _value(row, column):
+        return f"{reverse('device360')}?q={quote(getattr(row, 'key', '') or _value(row, column), safe='')}"
+    else:
         return ""
-    return f"{reverse('device360')}?q={quote(getattr(row, 'key', '') or _value(row, column), safe='')}"
+    return reverse("switch", args=[serial]) if serial else ""
 
 
 @login_required
@@ -207,7 +216,7 @@ def report(request, slug):
         context["rows"] = [
             [
                 {"text": shown[0], "title": shown[1], "hit": c in filtered_paths,
-                 "link": _lookup_link(row, c)}
+                 "link": _link(report, row, c)}
                 for c in columns
                 for shown in [_show(_value(row, fields[c].path), fields[c].kind)]
             ]
@@ -219,6 +228,32 @@ def report(request, slug):
             context["next_url"] = _url(request, page=page.next_page_number())
     context["total_display"] = _n(context["total"])
     return render(request, "reports/report.html", context)
+
+
+@login_required
+def switch(request, serial):
+    """One switch drawn like its faceplate, with the chosen port's settings."""
+    ports = list(SwitchPort.objects.filter(switch_serial=serial).order_by("pk"))
+    if not ports:
+        raise Http404
+    device = NetDevice.objects.filter(serial=serial, kind="Switch").first()
+    aps = {d.mac: d for d in NetDevice.objects.filter(mac__in=[p.neighbor_mac for p in ports if p.neighbor_mac])}
+    chosen = next((p for p in ports if p.port_id == request.GET.get("port")), None) \
+        or next((p for p in ports if p.neighbor_kind == "Access point"), ports[0])
+    for port in ports:
+        port.plugged = aps.get(port.neighbor_mac)
+        port.classes = " ".join(c for c, on in (
+            ("up", port.link == "Connected"), ("ap", port.neighbor_kind == "Access point"),
+            ("trunk", port.mode == "Trunk"), ("poe", port.poe_in_use), ("off", port.link == "Disabled"),
+            ("on", port is chosen)) if on)
+    context = _shared(request, "switches")
+    context.update(
+        key=[("up", "Up"), ("up ap", "Access point"), ("trunk", "Trunk"), ("poe", "Drawing PoE"), ("", "Down")],
+        switch=device, first=ports[0], ports=ports, chosen=chosen,
+        faceplate=[p for p in ports if p.number], extra=[p for p in ports if not p.number],
+        up=sum(p.link == "Connected" for p in ports), plugged=[p for p in ports if p.neighbor and p is not chosen],
+    )
+    return render(request, "reports/switch.html", context)
 
 
 class _Echo:

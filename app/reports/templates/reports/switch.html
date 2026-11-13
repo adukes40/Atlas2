@@ -1,0 +1,43 @@
+{% extends "reports/layout.html" %}
+{% block report %}
+<section class="card rep-card">
+  <div class="rep-head">
+    <div>
+      <h2 class="rep-title">{{ first.switch_name|default:first.switch_serial }}</h2>
+      <p class="muted">{% if switch %}{{ switch.model }} · {% endif %}<span class="mono">{{ first.switch_serial }}</span>{% if switch.ip %} · {{ switch.ip }}{% endif %}{% if first.site %} · {{ first.site }}{% endif %}{% if switch.firmware %} · {{ switch.firmware }}{% endif %} · {{ up }} of {{ ports|length }} ports up{% if switch.status %} · {{ switch.status }}{% endif %}</p>
+    </div>
+    <div class="rep-actions">
+      <a class="btn quiet sm" href="{% url 'report' 'switches' %}">All switches</a>
+      {% if switch.url %}<a class="btn sm" href="{{ switch.url }}" target="_blank" rel="noopener">Open in Meraki</a>{% endif %}
+    </div>
+  </div>
+  <div class="face" role="list" aria-label="Ports">
+    {% for p in faceplate %}<a role="listitem" class="port {{ p.classes }}" href="?port={{ p.port_id|urlencode }}" title="Port {{ p.port_id }}{% if p.neighbor %}: {{ p.neighbor }}{% endif %}"{% if p.port_id == chosen.port_id %} aria-current="true"{% endif %}>{{ p.port_id }}</a>{% endfor %}
+  </div>
+  {% if extra %}<div class="face extra">{% for p in extra %}<a class="port {{ p.classes }}" href="?port={{ p.port_id|urlencode }}" title="Port {{ p.port_id }}"{% if p.port_id == chosen.port_id %} aria-current="true"{% endif %}>{{ p.port_id }}</a>{% endfor %}</div>{% endif %}
+  <p class="face-key">{% for c, words in key %}<span><span class="port {{ c }}"></span>{{ words }}</span>{% endfor %}</p>
+</section>
+<div class="rep-pair">
+  <section class="card">
+    <div class="card-head"><h2>Port {{ chosen.port_id }}</h2><span class="muted">Meraki{% if chosen.plugged.vendor == 'Mist' %} + Mist{% endif %}</span></div>
+    <dl>
+      <div class="kv"><dt>Plugged in</dt><dd>{% if chosen.neighbor %}<b>{{ chosen.neighbor }}</b>{% if chosen.plugged %} ({{ chosen.plugged.vendor }} {{ chosen.plugged.model }}{% if chosen.plugged.clients is not None %}, {{ chosen.plugged.clients }} client{{ chosen.plugged.clients|pluralize }}{% endif %}){% elif chosen.neighbor_model %} ({{ chosen.neighbor_model }}){% endif %}{% else %}Nothing that announces itself{% endif %}</dd></div>
+      {% if chosen.neighbor_ip %}<div class="kv"><dt>Its IP address</dt><dd class="mono">{{ chosen.neighbor_ip }}</dd></div>{% endif %}
+      <div class="kv"><dt>Port name</dt><dd>{{ chosen.name|default:"—" }}</dd></div>
+      <div class="kv"><dt>Mode</dt><dd>{% if chosen.mode == 'Trunk' %}Trunk, native VLAN {{ chosen.vlan|default:"—" }}{% elif chosen.mode == 'Access' %}Access, VLAN {{ chosen.vlan|default:"—" }}{% else %}{{ chosen.mode|default:"—" }}{% endif %}</dd></div>
+      {% if chosen.allowed_vlans %}<div class="kv"><dt>Allowed VLANs</dt><dd class="mono">{{ chosen.allowed_vlans }}</dd></div>{% endif %}
+      {% if chosen.voice_vlan %}<div class="kv"><dt>Voice VLAN</dt><dd>{{ chosen.voice_vlan }}</dd></div>{% endif %}
+      <div class="kv"><dt>PoE</dt><dd>{% if chosen.poe %}On{% if chosen.plugged.poe_draw is not None %} · drawing {{ chosen.plugged.poe_draw }} W{% elif chosen.poe_in_use %} · in use{% endif %}{% else %}Off{% endif %}</dd></div>
+      <div class="kv"><dt>Link</dt><dd>{{ chosen.link|default:"—" }}{% if chosen.speed %} · {{ chosen.speed }}{% endif %}{% if chosen.uplink %} · uplink{% endif %}</dd></div>
+      {% if chosen.problems %}<div class="kv"><dt>Errors and warnings</dt><dd class="warn">{{ chosen.problems }}</dd></div>{% endif %}
+      <div class="kv"><dt>STP guard</dt><dd>{{ chosen.stp_guard|default:"—" }}</dd></div>
+      <div class="kv"><dt>Access policy</dt><dd>{{ chosen.access_policy|default:"—" }}</dd></div>
+    </dl>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Other ports in use</h2></div>
+    <dl>{% for p in plugged %}<div class="kv"><dt><a href="?port={{ p.port_id|urlencode }}">Port {{ p.port_id }}</a></dt><dd>{{ p.neighbor }}{% if p.neighbor_kind and p.neighbor_kind != 'Other' %} <small class="muted">{{ p.neighbor_kind }}</small>{% endif %}</dd></div>
+    {% empty %}<p class="muted">No other port sees a device that announces itself.</p>{% endfor %}</dl>
+  </section>
+</div>
+{% endblock %}

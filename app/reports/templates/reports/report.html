@@ -51,7 +51,7 @@
         {% endif %}
       </form>
     </details>
-    <span class="count">{{ total_display }} {% if groups is not None %}row{{ total|pluralize }} in {{ groups|length }} group{{ groups|length|pluralize }}{% elif report.base == 'people' %}{% if total == 1 %}person{% else %}people{% endif %}{% elif report.base == 'lookups' %}lookup{{ total|pluralize }}{% else %}device{{ total|pluralize }}{% endif %}</span>
+    <span class="count">{{ total_display }} {% if groups is not None %}row{{ total|pluralize }} in {{ groups|length }} group{{ groups|length|pluralize }}{% elif total == 1 %}{{ report.noun.0 }}{% else %}{{ report.noun.1 }}{% endif %}</span>
   </div>
 
   {% if groups is not None %}

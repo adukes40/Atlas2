@@ -126,3 +126,84 @@ class SavedReport(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+
+class NetDevice(models.Model):
+    """A switch or access point, from Meraki or Mist. Each system's rows are
+    replaced whole by each sync; a failed system keeps yesterday's rows."""
+
+    mac = models.CharField(max_length=12, unique=True)
+    vendor = models.CharField(max_length=10)  # Meraki or Mist
+    kind = models.CharField(max_length=20)  # Switch or Access point
+    name = models.CharField(max_length=200, blank=True)
+    model = models.CharField(max_length=40, blank=True)
+    serial = models.CharField(max_length=40, blank=True)
+    site = models.CharField(max_length=200, blank=True)
+    ip = models.CharField(max_length=45, blank=True)
+    status = models.CharField(max_length=20, blank=True)
+    firmware = models.CharField(max_length=60, blank=True)
+    clients = models.IntegerField(null=True, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    url = models.CharField(max_length=300, blank=True)  # the device's page in the vendor's dashboard
+    ports_up = models.IntegerField(null=True, blank=True)
+    ports_total = models.IntegerField(null=True, blank=True)
+    poe_draw = models.FloatField(null=True, blank=True)  # watts, as Mist reports it
+    # The switch port it plugs into: from Meraki's neighbor list, else from what the AP reports.
+    uplink_switch = models.CharField(max_length=200, blank=True)
+    uplink_serial = models.CharField(max_length=40, blank=True)
+    uplink_port = models.CharField(max_length=20, blank=True)
+    port_mode = models.CharField(max_length=20, blank=True)
+    port_vlan = models.CharField(max_length=20, blank=True)
+    reported_switch = models.CharField(max_length=200, blank=True)  # what the AP itself says (LLDP)
+    reported_port = models.CharField(max_length=40, blank=True)
+
+
+class SwitchPort(models.Model):
+    """One Meraki switch port: its settings, its link, and what is plugged in."""
+
+    switch_serial = models.CharField(max_length=40, db_index=True)
+    switch_name = models.CharField(max_length=200, blank=True)
+    site = models.CharField(max_length=200, blank=True)
+    port_id = models.CharField(max_length=20)
+    number = models.IntegerField(default=0)  # for sorting 2 before 10
+    name = models.CharField(max_length=200, blank=True)
+    enabled = models.BooleanField(default=True)
+    mode = models.CharField(max_length=20, blank=True)  # Access, Trunk, Stack
+    vlan = models.CharField(max_length=20, blank=True)
+    voice_vlan = models.CharField(max_length=20, blank=True)
+    allowed_vlans = models.CharField(max_length=300, blank=True)
+    poe = models.BooleanField(default=False)
+    stp_guard = models.CharField(max_length=40, blank=True)
+    access_policy = models.CharField(max_length=60, blank=True)
+    link = models.CharField(max_length=20, blank=True)  # Connected, Disconnected, Disabled
+    speed = models.CharField(max_length=20, blank=True)
+    uplink = models.BooleanField(default=False)
+    poe_in_use = models.BooleanField(default=False)
+    problems = models.CharField(max_length=300, blank=True)
+    neighbor = models.CharField(max_length=200, blank=True)
+    neighbor_kind = models.CharField(max_length=20, blank=True)  # Access point, Camera, Switch, Phone, Other
+    neighbor_model = models.CharField(max_length=200, blank=True)
+    neighbor_mac = models.CharField(max_length=12, blank=True, db_index=True)
+    neighbor_ip = models.CharField(max_length=45, blank=True)
+
+
+class Wlan(models.Model):
+    """A Mist wireless network (SSID) configuration."""
+
+    ssid = models.CharField(max_length=100)
+    enabled = models.BooleanField(default=True)
+    security = models.CharField(max_length=40, blank=True)
+    vlan = models.CharField(max_length=40, blank=True)
+    bands = models.CharField(max_length=40, blank=True)
+    scope = models.CharField(max_length=200, blank=True)
+    psks = models.IntegerField(default=0)
+
+
+class Psk(models.Model):
+    """A Mist personal pre-shared key, without the key itself."""
+
+    name = models.CharField(max_length=200, blank=True)
+    ssid = models.CharField(max_length=100, blank=True)
+    role = models.CharField(max_length=100, blank=True)
+    vlan = models.CharField(max_length=20, blank=True)
+    expires = models.DateTimeField(null=True, blank=True)
