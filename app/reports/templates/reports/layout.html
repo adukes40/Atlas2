@@ -4,8 +4,7 @@
 <div class="rep-top">
   <h1>Reports</h1>
   <div class="asof">
-    <span>{% if data_as_of %}Data as of <b>{{ data_as_of }}</b>{% else %}No data yet{% endif %}
-      </form>
+    <span>{% if data_as_of %}Data as of <b>{{ data_as_of }}</b>{% else %}No data yet{% endif %}</span>
   {% if sync_waiting %}<span class="chip">Syncing…</span>{% else %}{% include "reports/sync_menu.html" with next=request.get_full_path %}{% endif %}
   </div>
 </div>

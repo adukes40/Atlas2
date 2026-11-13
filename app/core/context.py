@@ -22,6 +22,8 @@ def atlas(request):
         "mode_choice": choice,
         # Written to <html data-mode>. Empty for "auto", so the device decides.
         "mode": choice if choice != "auto" else None,
+        # The one appearance button switches to the other mode (on Auto, atlas.js picks by the device).
+        "mode_next": "light" if choice == "dark" else "dark",
         "systems": systems(),
         "recent_lookups": recent_lookups(request.user) if request.user.is_authenticated else [],
         "atlas_version": __version__,

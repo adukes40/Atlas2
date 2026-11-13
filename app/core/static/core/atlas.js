@@ -15,3 +15,13 @@
     }
   });
 })();
+
+// On "Auto" the page follows the device, so the switch offers the other mode.
+(function () {
+  var button = document.querySelector(".mode button[data-auto='1']");
+  if (button && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    button.value = "light";
+    button.setAttribute("aria-label", "Switch to light mode");
+    button.title = "Switch to light mode";
+  }
+})();
