@@ -75,7 +75,7 @@ def _url(request, drop=(), **changes):
     """This page's address with some parameters changed. A list value replaces
     every value of that name; None removes it."""
     params = request.GET.copy()
-    for name in ("pick", "add_op", "add_value", "page", *drop):
+    for name in ("pick", "add_op", "add_value", "replace", "page", *drop):
         params.pop(name, None)
     for name, value in changes.items():
         if value is None:
@@ -150,7 +150,12 @@ def report(request, slug):
         token = f"{request.GET['add_field']}.{request.GET.get('add_op', '')}.{request.GET.get('add_value', '')}"
         current = request.GET.getlist("f") if "edited" in request.GET else list(report.filters)
         if parse_filter(fields, token):
-            current.append(token)
+            # Editing a chip puts the changed filter where the old one was.
+            replace = request.GET.get("replace")
+            if replace in current:
+                current[current.index(replace)] = token
+            else:
+                current.append(token)
         else:
             messages.error(request, "That filter needs a value Atlas can use. Days and amounts are numbers.")
         return redirect(request.path + _url(request, drop=("add_field",), f=current, edited="1"))
@@ -167,7 +172,8 @@ def report(request, slug):
 
     filtered_paths = {f.field.key for f in filters}
     chips = [
-        {"filter": f, "remove": _url(request, f=[t.token for t in filters if t is not f], edited="1")}
+        {"filter": f, "remove": _url(request, f=[t.token for t in filters if t is not f], edited="1"),
+         "ops": [(op, words.replace("{v}", "…")) for op, words in OPS[f.field.kind].items()]}
         for f in filters
     ]
     context = _shared(request, slug)

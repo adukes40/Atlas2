@@ -159,6 +159,8 @@ dl { margin: 0; }
 .pill b { color: var(--focus); }
 .pill a { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; min-height: 26px; color: var(--ink2); text-decoration: none; font-size: 16px; border-radius: 50%; }
 .pill a:hover { color: var(--ink); background: var(--line); }
+.pill > .pop > summary { padding: 6px 0; }
+.pill > .pop > summary:hover b { text-decoration: underline; }
 .pill.add { border-style: dashed; color: var(--ink2); padding-right: 12px; cursor: pointer; }
 .chips .count { margin-left: auto; font-weight: 800; font-size: 13px; color: var(--ink2); }
 .pop { position: relative; }

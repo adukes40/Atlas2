@@ -338,13 +338,6 @@ REPORTS = [
         note="Status names are matched by the words in the first filter. Change them if yours differ.",
     ),
     Report(
-        "never-on-network", "Never on our network", G["where"],
-        "Assigned Chromebooks that check in to Google but haven't been on our Wi-Fi in 30 days: used at home, never at school.",
-        "devices", ("owner__name.set.", "last_sync.within.14", "last_on_network.notwithin.30"),
-        DEVICE_COLUMNS + ("owner__grade", "last_sync", "last_on_network"), "owner__school",
-        note="Atlas keeps every Wi-Fi sighting from its nightly copy, so this fills in over the first weeks.",
-    ),
-    Report(
         "disabled-but-assigned", "Disabled but still assigned", G["where"],
         "Chromebooks disabled or deprovisioned in Google that someone still has in Incident IQ.",
         "devices", ("google_status.is.Disabled, Deprovisioned", "owner__name.set."),

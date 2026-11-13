@@ -68,7 +68,7 @@ Last updated 2026-11-13 (Reports).
 
 12. Reports and the nightly sync (2026-11-13). Layout "A with B's tiles",
     picked by Austin from four mockups: an Overview of count tiles (with a
-    30-day trend once nights accumulate), then a library of 15 reports, each
+    30-day trend once nights accumulate), then a library of 15 reports (14 after "Never on our network" was dropped), each
     one table with filter chips on any field, Columns, Group by, Save as and
     Export CSV. Column headers and group headings carry the accent colour
     (Austin asked for them to stand out). Technicians see every report.
@@ -116,7 +116,10 @@ Last updated 2026-11-13 (Reports).
     - PSK passphrases are never read into Atlas; only name, SSID, role, VLAN
       and expiry.
     - Meraki MR APs are included (Austin had not said whether they are
-      retiring); filter Vendor to drop them. 141 tests.
+      retiring); filter Vendor to drop them.
+    - Filter chips open for editing: click one to change its operation or
+      value in place (`replace` on the add-filter request), no remove and re-add.
+      "Never on our network" was dropped (Austin, same day). 142 tests.
 
 ## How the three new connections work
 

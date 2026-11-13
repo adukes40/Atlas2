@@ -275,6 +275,17 @@ class PageTests(TestCase):
         bad = self.client.get(url, {"add_field": "last_sync", "add_op": "older", "add_value": "soon"}, follow=True)
         self.assertContains(bad, "Days and amounts are numbers")
 
+    def test_a_filter_chip_can_be_changed_in_place(self):
+        url = reverse("report", args=["not-seen-30"])
+        page = self.client.get(url)
+        self.assertContains(page, 'name="replace" value="last_sync.older.30"')
+        changed = self.client.get(url, {"add_field": "last_sync", "add_op": "older", "add_value": "60",
+                                        "replace": "last_sync.older.30", "edited": "1",
+                                        "f": ["last_sync.older.30", "owner__name.set."]})
+        self.assertIn("f=last_sync.older.60&f=owner__name.set.", changed["Location"])
+        self.assertNotIn("replace", changed["Location"])
+        self.assertContains(self.client.get(changed["Location"]), "more than 60 days ago")
+
     def test_grouping_counts_rows(self):
         page = self.client.get(reverse("report", args=["fleet"]))
         self.assertContains(page, "rows in 1 group<")
