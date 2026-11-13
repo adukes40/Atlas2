@@ -1,16 +1,17 @@
 import django
 from django.contrib import messages
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .context import MODE_COOKIE, MODES
-from .forms import OrganizationForm
+from .forms import OrganizationForm, UserForm
 from .models import Organization
 
 
@@ -43,7 +44,31 @@ def settings_page(request):
         form.save()
         messages.success(request, "Settings saved.")
         return redirect("settings")
-    return render(request, "core/settings.html", {"section": "settings", "form": form})
+    users = get_user_model().objects.filter(is_active=True).count()
+    return render(request, "core/settings.html", {"section": "settings", "form": form, "active_users": users})
+
+
+@login_required
+def users(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    people = get_user_model().objects.order_by("-is_active", "username")
+    return render(request, "core/users.html", {"section": "settings", "people": people})
+
+
+@login_required
+def user_edit(request, pk=None):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    person = get_object_or_404(get_user_model(), pk=pk) if pk else None
+    form = UserForm(request.POST or None, instance=person, editor=request.user)
+    if request.method == "POST" and form.is_valid():
+        saved = form.save()
+        if saved.pk == request.user.pk:
+            update_session_auth_hash(request, saved)  # changing your own password keeps you signed in
+        messages.success(request, f"Saved {saved.get_username()}.")
+        return redirect("users")
+    return render(request, "core/user_form.html", {"section": "settings", "form": form, "person": person})
 
 
 @login_required

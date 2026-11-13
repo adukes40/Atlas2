@@ -23,6 +23,12 @@ Last updated 2026-11-13.
    MACs. The most recent sighting fills Location and Last seen. A failure in
    any of the three shows on its card and in Settings, never sinks the lookup.
    97 tests pass.
+7. Users screen (Settings, Users): administrators add people, change names,
+   email and role (Technician or Administrator), reset passwords, and turn an
+   account off instead of deleting it, so lookup history stays. Nobody can turn
+   off their own account or remove their own administrator access, so there is
+   always one administrator left. Passwords go through Django's validators.
+   105 tests pass.
 
 ## How the three new connections work
 
@@ -56,6 +62,5 @@ Atlas runs in an LXC container as root at /opt/atlas, so commands need no sudo.
 1. Connect Google, Mist and Meraki on the live site and check a few lookups.
 2. Possibly: look up a device Incident IQ does not have by asking Google
    directly, and Mist wired clients for docked devices.
-3. Users screen, so accounts are not made with `createsuperuser`.
-4. Reports from a nightly sync (the Reports page says this is coming).
-5. HTTPS in front of Atlas before use outside a trusted network.
+3. Reports from a nightly sync (the Reports page says this is coming).
+4. HTTPS in front of Atlas before use outside a trusted network.
