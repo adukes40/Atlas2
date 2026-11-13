@@ -119,7 +119,9 @@ Last updated 2026-11-13 (Reports).
       retiring); filter Vendor to drop them.
     - Filter chips open for editing: click one to change its operation or
       value in place (`replace` on the add-filter request), no remove and re-add.
-      "Never on our network" was dropped (Austin, same day).
+      "Never on our network" was dropped (Austin, same day). Pop-up menus
+      (filters, Columns, Sync now) close on a click outside or Esc
+      (`core/static/core/atlas.js`, the only script in Atlas).
     - Each platform syncs on its own (Austin: "should not need to run full
       scans on everything just to update one platform"). Sync now, on Reports
       and System, opens a menu: tick Google, Incident IQ, Mist or Meraki, or
