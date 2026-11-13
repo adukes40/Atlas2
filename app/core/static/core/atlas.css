@@ -1,27 +1,28 @@
 /* Atlas layout. Colors, fonts and corner radii come from the active theme file. */
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { font: 15px/1.45 var(--font-body); color: var(--ink); background: var(--bg); }
+body { font: 15px/1.45 var(--font-body); font-weight: var(--body-weight, 400); color: var(--ink); background: var(--bg); }
 a { color: var(--link); }
 p { margin: 0; }
 h1 { margin: 0; font: var(--h1-weight) 28px/1.2 var(--font-heading); color: var(--heading); }
 h2 { margin: 0; font: var(--h2-weight) 17px/1.3 var(--font-heading); color: var(--heading); }
 .muted { color: var(--ink2); }
-.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+.mono { font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace); font-size: 13px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .skip { position: absolute; left: 8px; top: -60px; background: var(--surface); color: var(--ink); padding: 8px 12px; z-index: 10; }
 .skip:focus { top: 8px; }
 
 /* Shell: rail beside the work area; the rail stacks on top on a phone. */
 .shell { display: flex; flex-wrap: wrap; min-height: 100vh; }
-.rail { flex: 1 0 220px; background: var(--rail); color: var(--rail-ink); display: flex; flex-direction: column; gap: 24px; padding: 24px 0; }
+.rail { flex: 1 0 220px; background: var(--rail); color: var(--rail-ink); border-right: 1px solid var(--rail-edge, transparent); display: flex; flex-direction: column; gap: 24px; padding: 24px 0; }
 .rail :focus-visible { outline-color: var(--rail-accent); }
 .brand { padding: 0 24px; }
 .brand-org { font: 400 15px/1.25 var(--font-heading); overflow-wrap: anywhere; }
 .brand-app { font-size: 12px; font-weight: 700; letter-spacing: .14em; color: var(--rail-accent); margin-top: 4px; }
-.nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 24px 0 20px; border-left: 4px solid transparent; color: var(--rail-ink2); text-decoration: none; }
+.nav { display: grid; gap: 2px; }
+.nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 0 var(--nav-inset, 0px); padding: 0 calc(24px - var(--nav-inset, 0px)) 0 calc(20px - var(--nav-inset, 0px)); border-left: 4px solid transparent; border-radius: var(--nav-radius, 0); color: var(--rail-ink2); text-decoration: none; }
 .nav a:hover { color: var(--rail-ink); }
-.nav a[aria-current="page"] { color: var(--rail-ink); font-weight: 700; background: var(--rail-active); border-left-color: var(--rail-accent); }
+.nav a[aria-current="page"] { color: var(--rail-active-ink, var(--rail-ink)); font-weight: 700; background: var(--rail-active); border-left-color: var(--rail-marker, var(--rail-accent)); }
 .systems { margin-top: auto; padding: 0 24px; display: grid; gap: 8px; }
 .systems h2 { font: 700 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--rail-ink2); }
 .systems ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
@@ -35,7 +36,7 @@ h2 { margin: 0; font: var(--h2-weight) 17px/1.3 var(--font-heading); color: var(
 .topbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .lookup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; flex: 1 1 360px; max-width: 620px; }
 .lookup > div { flex: 1 1 240px; min-width: 0; }
-.lookup input { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.lookup input { font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace); }
 main { padding: 24px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
 
 /* Forms */
@@ -74,9 +75,9 @@ dl { margin: 0; }
 /* Phone: keep the rail short so the lookup box is on the first screen. */
 @media (max-width: 780px) {
   .rail { gap: 12px; padding: 16px 0 0; }
-  .nav { display: flex; flex-wrap: wrap; }
+  .nav { display: flex; flex-wrap: wrap; gap: 0; }
   .nav a { padding: 0 16px; border-left: 0; border-bottom: 4px solid transparent; }
-  .nav a[aria-current="page"] { border-bottom-color: var(--rail-accent); }
+  .nav a[aria-current="page"] { border-bottom-color: var(--rail-marker, var(--rail-accent)); }
   .systems { display: none; }
   .session { padding: 0 0 4px; border-top: 0; }
 }

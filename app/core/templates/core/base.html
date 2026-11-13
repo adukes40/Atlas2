@@ -48,9 +48,9 @@
       <form class="mode" method="post" action="{% url 'appearance' %}" role="group" aria-label="Appearance">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button name="mode" value="light" aria-pressed="{% if mode == 'light' %}true{% else %}false{% endif %}">Light</button>
-        <button name="mode" value="dark" aria-pressed="{% if mode == 'dark' %}true{% else %}false{% endif %}">Dark</button>
-        <button name="mode" value="system" aria-pressed="{% if mode %}false{% else %}true{% endif %}">Auto</button>
+        <button name="mode" value="light" aria-pressed="{% if mode_choice == 'light' %}true{% else %}false{% endif %}">Light</button>
+        <button name="mode" value="dark" aria-pressed="{% if mode_choice == 'dark' %}true{% else %}false{% endif %}">Dark</button>
+        <button name="mode" value="auto" aria-pressed="{% if mode_choice == 'auto' %}true{% else %}false{% endif %}">Auto</button>
       </form>
     </header>
     <main id="main">

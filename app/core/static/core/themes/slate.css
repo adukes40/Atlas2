@@ -1,4 +1,4 @@
-/* Atlas default theme: neutral, no organization branding. */
+/* Slate theme: neutral blue-grey, no organization branding. */
 :root {
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-heading: var(--font-body);

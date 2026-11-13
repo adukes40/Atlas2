@@ -1,0 +1,80 @@
+/* Graphite: the default Atlas theme. Charcoal with one amber accent,
+   rounded cards, Manrope text and JetBrains Mono for identifiers.
+   Dark unless the person picks Light. Fonts are served from Atlas itself. */
+@font-face { font-family: "Manrope"; font-weight: 500; font-display: swap; src: url("../fonts/manrope-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Manrope"; font-weight: 700; font-display: swap; src: url("../fonts/manrope-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Manrope"; font-weight: 800; font-display: swap; src: url("../fonts/manrope-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("../fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+
+:root {
+  --font-body: Manrope, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --body-weight: 500;
+  --h1-weight: 800;
+  --h2-weight: 800;
+  --radius: 12px;
+  --radius-card: 16px;
+  --radius-chip: 999px;
+  --rule: 1px solid var(--line);
+
+  --rail: #0d0e10;
+  --rail-edge: #2e3138;
+  --rail-ink: #ffffff;
+  --rail-ink2: #b5b9c2;
+  --rail-accent: #f2b33d;
+  --rail-active: #f2b33d;
+  --rail-active-ink: #131417;
+  --rail-marker: transparent;
+  --rail-line: #2e3138;
+  --nav-radius: 12px;
+  --nav-inset: 12px;
+
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --field: #ffffff;
+  --line: #dcdfe4;
+  --ink: #17181b;
+  --ink2: #555a63;
+  --heading: #17181b;
+  --link: #7a5200;
+  --focus: #7a5200;
+  --btn: #17181b;
+  --btn-ink: #ffffff;
+  --ok: #17633a;
+  --warn: #8a4500;
+}
+
+:root[data-mode="dark"] {
+  --bg: #131417;
+  --surface: #1b1d21;
+  --field: #1b1d21;
+  --line: #2e3138;
+  --ink: #ecedef;
+  --ink2: #a2a7b0;
+  --heading: #ecedef;
+  --link: #f2b33d;
+  --focus: #f2b33d;
+  --btn: #f2b33d;
+  --btn-ink: #131417;
+  --ok: #6fd39b;
+  --warn: #f2b33d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode="light"]) {
+    --bg: #131417;
+    --surface: #1b1d21;
+    --field: #1b1d21;
+    --line: #2e3138;
+    --ink: #ecedef;
+    --ink2: #a2a7b0;
+    --heading: #ecedef;
+    --link: #f2b33d;
+    --focus: #f2b33d;
+    --btn: #f2b33d;
+    --btn-ink: #131417;
+    --ok: #6fd39b;
+    --warn: #f2b33d;
+  }
+}

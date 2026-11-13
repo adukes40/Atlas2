@@ -48,7 +48,9 @@ development only.
 
 ## Themes
 
-The look is chosen in Settings → Organization. A theme is one CSS file in
+Graphite is the default look and opens in dark mode. Slate and Caesar Rodney
+are the other built-in themes, chosen in Settings → Organization. Anyone can
+switch between Light, Dark and Auto for themselves. A theme is one CSS file in
 `app/core/static/core/themes/` plus an entry in `app/core/themes.py`.
 
 ## Not done yet

@@ -65,10 +65,17 @@ class ThemeTests(TestCase):
         self.admin = User.objects.create_superuser("admin")
         self.client.force_login(self.admin)
 
-    def test_default_theme_is_neutral(self):
+    def test_default_theme_is_graphite_and_dark(self):
         response = self.client.get(reverse("device360"))
-        self.assertContains(response, "core/themes/default.css")
+        self.assertContains(response, "core/themes/graphite.css")
+        self.assertContains(response, 'data-mode="dark"')
         self.assertContains(response, "Your Organization")
+
+    def test_other_themes_follow_the_device_until_told_otherwise(self):
+        Organization.objects.update_or_create(pk=1, defaults={"theme": "slate"})
+        response = self.client.get(reverse("device360"))
+        self.assertContains(response, "core/themes/slate.css")
+        self.assertNotContains(response, "data-mode=")
 
     def test_administrator_can_rename_and_retheme(self):
         response = self.client.post(
@@ -77,37 +84,44 @@ class ThemeTests(TestCase):
         self.assertRedirects(response, reverse("settings"))
         page = self.client.get(reverse("device360"))
         self.assertContains(page, "core/themes/caesar-rodney.css")
-        self.assertNotContains(page, "core/themes/default.css")
+        self.assertNotContains(page, "core/themes/graphite.css")
         self.assertContains(page, "Example District")
         self.assertEqual(Organization.objects.count(), 1)
 
     def test_unknown_theme_is_rejected(self):
         response = self.client.post(reverse("settings"), {"name": "X", "theme": "nope"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Organization.load().theme, "default")
+        self.assertEqual(Organization.load().theme, "graphite")
 
     def test_a_stored_theme_that_no_longer_exists_falls_back(self):
         Organization.objects.update_or_create(pk=1, defaults={"theme": "removed"})
-        self.assertContains(self.client.get(reverse("device360")), "core/themes/default.css")
+        self.assertContains(self.client.get(reverse("device360")), "core/themes/graphite.css")
 
 
 class AppearanceTests(TestCase):
     def setUp(self):
         self.client.force_login(User.objects.create_user("tech"))
 
-    def test_dark_mode_is_remembered(self):
-        response = self.client.post(reverse("appearance"), {"mode": "dark", "next": "/reports/"})
+    def test_light_mode_is_remembered(self):
+        response = self.client.post(reverse("appearance"), {"mode": "light", "next": "/reports/"})
         self.assertRedirects(response, "/reports/")
-        self.assertContains(self.client.get(reverse("reports")), 'data-mode="dark"')
+        self.assertContains(self.client.get(reverse("reports")), 'data-mode="light"')
 
-    def test_auto_forgets_the_choice(self):
-        self.client.post(reverse("appearance"), {"mode": "dark"})
-        self.client.post(reverse("appearance"), {"mode": "system"})
-        self.assertNotContains(self.client.get(reverse("reports")), "data-mode=")
+    def test_auto_overrides_the_theme_default_and_follows_the_device(self):
+        self.client.post(reverse("appearance"), {"mode": "auto"})
+        page = self.client.get(reverse("reports"))
+        self.assertNotContains(page, "data-mode=")
+        self.assertContains(page, 'value="auto" aria-pressed="true"')
 
     def test_unknown_mode_is_ignored(self):
         self.client.post(reverse("appearance"), {"mode": "<script>"})
-        self.assertNotContains(self.client.get(reverse("reports")), "data-mode=")
+        self.assertNotIn("atlas_mode", self.client.cookies)
+        self.assertContains(self.client.get(reverse("reports")), 'data-mode="dark"')
+
+    def test_the_pressed_button_matches_what_is_shown(self):
+        page = self.client.get(reverse("reports"))
+        self.assertContains(page, 'value="dark" aria-pressed="true"')
+        self.assertContains(page, 'value="light" aria-pressed="false"')
 
     def test_cannot_redirect_off_site(self):
         response = self.client.post(
