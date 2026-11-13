@@ -66,6 +66,7 @@ class LookupTests(TestCase):
             f'href="{BASE}/agent/assets/a-1"',
             f'href="{BASE}/agent/users/u-1"',
             "Cracked screen",
+            f'href="{BASE}/agent/tickets/live/t-5521"',
             "Waiting on parts",
             "2026-10-01",
         ]:

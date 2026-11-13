@@ -190,7 +190,7 @@
     {% if device.tickets %}
     <dl>
       {% for ticket in device.tickets %}
-      <div class="kv"><dt><span class="mono">#{{ ticket.number }}</span> {{ ticket.subject }}</dt><dd>{{ ticket.status }}{% if ticket.opened %} <span class="muted">· {{ ticket.opened }}</span>{% endif %}</dd></div>
+      <div class="kv"><dt>{% if ticket.ticket_id %}<a href="{{ result.iiq_url }}/agent/tickets/live/{{ ticket.ticket_id|urlencode }}" target="_blank" rel="noopener"><span class="mono">#{{ ticket.number }}</span> {{ ticket.subject }}</a>{% else %}<span class="mono">#{{ ticket.number }}</span> {{ ticket.subject }}{% endif %}</dt><dd>{{ ticket.status }}{% if ticket.opened %} <span class="muted">· {{ ticket.opened }}</span>{% endif %}</dd></div>
       {% endfor %}
     </dl>
     {% elif result.tickets_message %}
