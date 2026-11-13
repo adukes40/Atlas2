@@ -3,11 +3,11 @@
 {% block content %}
 <div class="rep-top">
   <h1>Reports</h1>
-  <form class="asof" method="post" action="{% url 'sync-now' %}">
-    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-    {% if data_as_of %}Data as of <b>{{ data_as_of }}</b>{% else %}No data yet{% endif %}
-    {% if sync_waiting %}<span class="chip">Syncing…</span>{% else %}<button class="btn quiet sm" type="submit">Sync now</button>{% endif %}
-  </form>
+  <div class="asof">
+    <span>{% if data_as_of %}Data as of <b>{{ data_as_of }}</b>{% else %}No data yet{% endif %}
+      </form>
+  {% if sync_waiting %}<span class="chip">Syncing…</span>{% else %}{% include "reports/sync_menu.html" with next=request.get_full_path %}{% endif %}
+  </div>
 </div>
 {% if sync_problems %}
 <div class="alert" role="status"><b>The last sync had a problem.</b> Reports show the data from before it.

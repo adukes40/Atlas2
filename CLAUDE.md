@@ -8,12 +8,15 @@ seen, pulled from Incident IQ, Google Workspace, Mist and Meraki. Read
 ## Layout
 
 - `app/atlas/` project settings and root URLs (routes live in `app/core/urls.py`, which includes `reports/urls.py`)
-- `app/core/` sign-in shell, themes, Organization (single row), Settings, Users
+- `app/core/` sign-in shell, themes, Organization (single row, holds the WAN IP list), Settings, Users
   (Django's own User; superuser means Administrator), System, `/healthz/`
 - `app/devices/` Device 360 page, lookup service, open-lookup tabs, recent lookups, `LookupLog`
 - `app/reports/` Reports: nightly copy (`sync.py`, run by the `sync` compose
   service via `manage.py run_sync_schedule`), every report and filter field in
-  `catalog.py`, `Device`/`Person` rebuilt whole each sync, `Sighting` kept
+  `catalog.py`, `Device`/`Person` rebuilt whole each sync, `Sighting` kept;
+  network gear (`NetDevice`, `SwitchPort`, `Wlan`, `Psk`) replaced per vendor,
+  APs joined to switch ports by `link_gear()`, switch faceplate page in `views.switch`;
+  a run can cover only some platforms (`SyncRun.systems`, `sync.PLATFORMS`), the rest rebuilt from the copy
 - `app/integrations/` one config model per outside system (always row 1), encrypted tokens
   (`crypto.py`, key from `ATLAS_ENCRYPTION_KEY`), sidebar status (`status.py`)
 - `app/integrations/incidentiq/` `client.py` is the only code that talks to Incident IQ;

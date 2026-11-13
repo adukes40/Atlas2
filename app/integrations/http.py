@@ -28,14 +28,16 @@ def passing(error):
 
 
 def get_json(session, url, *, system, error, rejected, headers=None, params=None, method="GET", data=None,
-             timeout=TIMEOUT, retries=0):
-    """Parsed JSON, or None when the system answers 404 (not found)."""
+             timeout=TIMEOUT, retries=0, link=False):
+    """Parsed JSON, or None when the system answers 404 (not found). With
+    link=True, (JSON, the address of the next page or "") for lists paged by
+    a Link header."""
     return with_retries(
-        lambda: _get_json(session, url, system, error, rejected, headers, params, method, data, timeout), retries
+        lambda: _get_json(session, url, system, error, rejected, headers, params, method, data, timeout, link), retries
     )
 
 
-def _get_json(session, url, system, error, rejected, headers, params, method, data, timeout):
+def _get_json(session, url, system, error, rejected, headers, params, method, data, timeout, link=False):
     host = urlsplit(url).hostname
     try:
         response = session.request(method, url, headers=headers, params=params, data=data, timeout=timeout)
@@ -48,7 +50,7 @@ def _get_json(session, url, system, error, rejected, headers, params, method, da
 
     status = response.status_code
     if status == 404:
-        return None
+        return (None, "") if link else None
     if status in (401, 403):
         raise error(rejected)
     if status == 429:
@@ -58,6 +60,7 @@ def _get_json(session, url, system, error, rejected, headers, params, method, da
     if status != 200:
         raise error(f"{system} answered with an error (HTTP {status}).")
     try:
-        return response.json()
+        parsed = response.json()
     except ValueError:
         raise error(f"{system} sent back something that is not data.") from None
+    return (parsed, response.links.get("next", {}).get("url", "")) if link else parsed

@@ -43,6 +43,7 @@ main { padding: 24px; display: flex; flex-direction: column; gap: 16px; flex: 1;
 /* Forms */
 label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; }
 input[type="text"], input[type="password"], input[type="email"], select { width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--ink2); border-radius: var(--radius); background: var(--field); color: var(--ink); font: inherit; }
+textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--ink2); border-radius: var(--radius); background: var(--field); color: var(--ink); font: 14px/1.5 var(--font-mono); resize: vertical; }
 .field { margin-bottom: 16px; }
 .check label { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0; font-size: 15px; }
 .check input { width: 20px; height: 20px; margin: 0; }
@@ -159,6 +160,8 @@ dl { margin: 0; }
 .pill b { color: var(--focus); }
 .pill a { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; min-height: 26px; color: var(--ink2); text-decoration: none; font-size: 16px; border-radius: 50%; }
 .pill a:hover { color: var(--ink); background: var(--line); }
+.pill > .pop > summary { padding: 6px 0; }
+.pill > .pop > summary:hover b { text-decoration: underline; }
 .pill.add { border-style: dashed; color: var(--ink2); padding-right: 12px; cursor: pointer; }
 .chips .count { margin-left: auto; font-weight: 800; font-size: 13px; color: var(--ink2); }
 .pop { position: relative; }
@@ -199,6 +202,22 @@ dl { margin: 0; }
 .signin h1 { margin-bottom: 24px; }
 
 /* Phone: keep the rail short so the lookup box is on the first screen. */
+/* Switch page: the faceplate, odd ports on top like the hardware */
+.face { display: grid; grid-template-rows: repeat(2, 38px); grid-auto-flow: column; grid-auto-columns: minmax(26px, 1fr); gap: 4px; margin-top: 16px; overflow-x: auto; padding-bottom: 4px; }
+.face.extra { grid-template-rows: 38px; margin-top: 8px; justify-content: start; }
+.port { position: relative; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; color: var(--ink2); font: 700 12px/1 var(--font-mono); text-decoration: none; }
+.port.up { background: color-mix(in srgb, var(--ok) 28%, var(--surface)); color: var(--ink); }
+.port.ap { background: color-mix(in srgb, var(--focus) 38%, var(--surface)); }
+.port.trunk { border: 2px solid color-mix(in srgb, #4d8fe6 85%, var(--ink)); }
+.port.poe::after { content: ""; position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--focus); }
+.port.off { opacity: .45; }
+.port.on { outline: 2px solid var(--ink); outline-offset: 2px; }
+.port:hover { border-color: var(--focus); }
+.face-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 12px; color: var(--ink2); font-size: 13px; }
+.face-key > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.face-key .port { width: 14px; height: 14px; }
+.face-key .port.poe::after { top: 3px; right: 3px; width: 6px; height: 6px; }
+.rep-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; }
 @media (max-width: 780px) {
   .rail { gap: 12px; padding: 16px 0 0; }
   .nav { display: flex; flex-wrap: wrap; gap: 0; }

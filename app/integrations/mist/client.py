@@ -107,3 +107,14 @@ class MistClient:
             return (results[0] or {}).get("name") or ""
 
         return cache.get_or_set(f"mist-ap:{mac}", fetch, NAME_CACHE) if mac else ""
+
+    def org_list(self, what, params=None):
+        """Every item of an organization list such as "sites", "wlans" or
+        "stats/devices", a thousand per page."""
+        path = f"/orgs/{quote(self.org_id, safe='')}/{what}"
+        for page in range(1, 101):
+            data = self._get(path, {**(params or {}), "limit": 1000, "page": page}) or []
+            rows = [r for r in data if isinstance(r, dict)] if isinstance(data, list) else []
+            yield from rows
+            if len(rows) < 1000:
+                return

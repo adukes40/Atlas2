@@ -13,8 +13,8 @@ from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
-from .models import DailyCount, SavedReport, SyncRun
-from .sync import request_sync, sync_zone
+from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
+from .sync import PLATFORMS, as_of, request_sync, sync_zone
 
 PAGE_SIZE = 100
 
@@ -30,20 +30,32 @@ def _counts():
     return latest
 
 
+def _stamp(moment):
+    return moment.astimezone(sync_zone()).strftime("%b %-d, %-I:%M %p")
+
+
 def _n(number):
     return f"{number:,}" if number is not None else None
 
 
+def platform_times(when=None):
+    """Each platform with when its data was last copied, for the Sync now menu."""
+    when = as_of() if when is None else when
+    return [(p, _stamp(when[p]) if p in when else "never") for p in PLATFORMS]
+
+
 def _shared(request, current=""):
     counts = _counts()
-    last = SyncRun.last_good()
+    when = as_of()
     newest = SyncRun.objects.exclude(state=SyncRun.REQUESTED).first()
     return {
         "section": "reports",
         "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library()],
         "saved": SavedReport.objects.filter(user=request.user),
         "current": current,
-        "data_as_of": last.finished_at.astimezone(sync_zone()).strftime("%b %-d, %-I:%M %p") if last else None,
+        # The oldest platform's copy, so "as of" never claims fresher data than a report shows.
+        "data_as_of": _stamp(min(when.values())) if when else None,
+        "platforms": platform_times(when),
         "sync_problems": newest.problems if newest and newest.problems else {},
         "sync_waiting": SyncRun.objects.filter(state__in=[SyncRun.REQUESTED, SyncRun.RUNNING]).exists(),
     }
@@ -75,7 +87,7 @@ def _url(request, drop=(), **changes):
     """This page's address with some parameters changed. A list value replaces
     every value of that name; None removes it."""
     params = request.GET.copy()
-    for name in ("pick", "add_op", "add_value", "page", *drop):
+    for name in ("pick", "add_op", "add_value", "replace", "page", *drop):
         params.pop(name, None)
     for name, value in changes.items():
         if value is None:
@@ -122,11 +134,20 @@ def _raw(value, kind):
 LINKED = {"asset_tag", "serial", "query"}
 
 
-def _lookup_link(row, column):
-    """Device 360 for this row's device, from its tag, serial or search."""
-    if column not in LINKED or not _value(row, column):
+def _link(report, row, column):
+    """Device 360 for a Chromebook's tag, serial or search; the switch page
+    for a switch's name."""
+    if report.base == "ports" and column == "switch_name":
+        serial = row.switch_serial
+    elif report.base == "gear" and column == "uplink_switch":
+        serial = row.uplink_serial
+    elif report.base == "gear" and column == "name" and row.kind == "Switch":
+        serial = row.serial
+    elif report.base in ("devices", "lookups") and column in LINKED and _value(row, column):
+        return f"{reverse('device360')}?q={quote(getattr(row, 'key', '') or _value(row, column), safe='')}"
+    else:
         return ""
-    return f"{reverse('device360')}?q={quote(getattr(row, 'key', '') or _value(row, column), safe='')}"
+    return reverse("switch", args=[serial]) if serial else ""
 
 
 @login_required
@@ -141,7 +162,12 @@ def report(request, slug):
         token = f"{request.GET['add_field']}.{request.GET.get('add_op', '')}.{request.GET.get('add_value', '')}"
         current = request.GET.getlist("f") if "edited" in request.GET else list(report.filters)
         if parse_filter(fields, token):
-            current.append(token)
+            # Editing a chip puts the changed filter where the old one was.
+            replace = request.GET.get("replace")
+            if replace in current:
+                current[current.index(replace)] = token
+            else:
+                current.append(token)
         else:
             messages.error(request, "That filter needs a value Atlas can use. Days and amounts are numbers.")
         return redirect(request.path + _url(request, drop=("add_field",), f=current, edited="1"))
@@ -158,7 +184,8 @@ def report(request, slug):
 
     filtered_paths = {f.field.key for f in filters}
     chips = [
-        {"filter": f, "remove": _url(request, f=[t.token for t in filters if t is not f], edited="1")}
+        {"filter": f, "remove": _url(request, f=[t.token for t in filters if t is not f], edited="1"),
+         "ops": [(op, words.replace("{v}", "…")) for op, words in OPS[f.field.kind].items()]}
         for f in filters
     ]
     context = _shared(request, slug)
@@ -207,7 +234,7 @@ def report(request, slug):
         context["rows"] = [
             [
                 {"text": shown[0], "title": shown[1], "hit": c in filtered_paths,
-                 "link": _lookup_link(row, c)}
+                 "link": _link(report, row, c)}
                 for c in columns
                 for shown in [_show(_value(row, fields[c].path), fields[c].kind)]
             ]
@@ -219,6 +246,32 @@ def report(request, slug):
             context["next_url"] = _url(request, page=page.next_page_number())
     context["total_display"] = _n(context["total"])
     return render(request, "reports/report.html", context)
+
+
+@login_required
+def switch(request, serial):
+    """One switch drawn like its faceplate, with the chosen port's settings."""
+    ports = list(SwitchPort.objects.filter(switch_serial=serial).order_by("pk"))
+    if not ports:
+        raise Http404
+    device = NetDevice.objects.filter(serial=serial, kind="Switch").first()
+    aps = {d.mac: d for d in NetDevice.objects.filter(mac__in=[p.neighbor_mac for p in ports if p.neighbor_mac])}
+    chosen = next((p for p in ports if p.port_id == request.GET.get("port")), None) \
+        or next((p for p in ports if p.neighbor_kind == "Access point"), ports[0])
+    for port in ports:
+        port.plugged = aps.get(port.neighbor_mac)
+        port.classes = " ".join(c for c, on in (
+            ("up", port.link == "Connected"), ("ap", port.neighbor_kind == "Access point"),
+            ("trunk", port.mode == "Trunk"), ("poe", port.poe_in_use), ("off", port.link == "Disabled"),
+            ("on", port is chosen)) if on)
+    context = _shared(request, "switches")
+    context.update(
+        key=[("up", "Up"), ("up ap", "Access point"), ("trunk", "Trunk"), ("poe", "Drawing PoE"), ("", "Down")],
+        switch=device, first=ports[0], ports=ports, chosen=chosen,
+        faceplate=[p for p in ports if p.number], extra=[p for p in ports if not p.number],
+        up=sum(p.link == "Connected" for p in ports), plugged=[p for p in ports if p.neighbor and p is not chosen],
+    )
+    return render(request, "reports/switch.html", context)
 
 
 class _Echo:
@@ -273,7 +326,13 @@ def delete_saved(request, pk):
 @login_required
 @require_POST
 def sync_now(request):
-    request_sync(request.user.get_username())
-    messages.success(request, "Sync queued. It usually takes a few minutes; reports update when it finishes.")
+    chosen = [] if request.POST.get("everything") else [p for p in request.POST.getlist("platform") if p in PLATFORMS]
     target = request.POST.get("next", "")
-    return redirect(target if target.startswith("/") and not target.startswith("//") else "reports")
+    target = target if target.startswith("/") and not target.startswith("//") else "reports"
+    if not chosen and not request.POST.get("everything"):
+        messages.error(request, "Tick at least one system to sync, or choose Sync everything.")
+        return redirect(target)
+    request_sync(request.user.get_username(), chosen)
+    what = " and ".join(chosen) if chosen else "Everything"
+    messages.success(request, f"{what} queued to sync. It usually takes a few minutes; reports update when it finishes.")
+    return redirect(target)

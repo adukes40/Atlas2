@@ -32,7 +32,16 @@
   </div>
 
   <div class="chips">
-    {% for c in chips %}<span class="pill">{{ c.filter.field.label }} <b>{{ c.filter.wording }}</b><a href="{{ c.remove }}" aria-label="Remove filter {{ c.filter.field.label }}">×</a></span>{% endfor %}
+    {% for c in chips %}<span class="pill"><details class="pop"><summary title="Change this filter">{{ c.filter.field.label }} <b>{{ c.filter.wording }}</b></summary>
+      <form method="get" class="pop-body">
+        {% for t in tokens %}<input type="hidden" name="f" value="{{ t }}">{% endfor %}
+        <input type="hidden" name="edited" value="1"><input type="hidden" name="add_field" value="{{ c.filter.field.key }}"><input type="hidden" name="replace" value="{{ c.filter.token }}">
+        <p><b>{{ c.filter.field.label }}</b></p>
+        <label for="op-{{ forloop.counter }}">Show rows where it</label>
+        <select id="op-{{ forloop.counter }}" name="add_op">{% for op, words in c.ops %}<option value="{{ op }}"{% if op == c.filter.op %} selected{% endif %}>{{ words }}</option>{% endfor %}</select>
+        {% if c.filter.field.kind != 'bool' %}<label for="value-{{ forloop.counter }}">Value</label><input id="value-{{ forloop.counter }}" name="add_value" type="text" value="{{ c.filter.value }}">{% endif %}
+        <button class="btn sm" type="submit">Update filter</button>
+      </form></details><a href="{{ c.remove }}" aria-label="Remove filter {{ c.filter.field.label }}">×</a></span>{% endfor %}
     <details class="pop"{% if pick %} open{% endif %}><summary class="pill add">+ Filter on anything</summary>
       <form method="get" class="pop-body">
         {% for t in tokens %}<input type="hidden" name="f" value="{{ t }}">{% endfor %}
@@ -51,7 +60,7 @@
         {% endif %}
       </form>
     </details>
-    <span class="count">{{ total_display }} {% if groups is not None %}row{{ total|pluralize }} in {{ groups|length }} group{{ groups|length|pluralize }}{% elif report.base == 'people' %}{% if total == 1 %}person{% else %}people{% endif %}{% elif report.base == 'lookups' %}lookup{{ total|pluralize }}{% else %}device{{ total|pluralize }}{% endif %}</span>
+    <span class="count">{{ total_display }} {% if groups is not None %}row{{ total|pluralize }} in {{ groups|length }} group{{ groups|length|pluralize }}{% elif total == 1 %}{{ report.noun.0 }}{% else %}{{ report.noun.1 }}{% endif %}</span>
   </div>
 
   {% if groups is not None %}

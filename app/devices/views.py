@@ -6,6 +6,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from . import tabs
+from core.models import Organization
+
 from .models import LookupLog
 from .service import lookup
 
@@ -28,6 +30,8 @@ def device360(request):
         if device:
             tabs.open_tab(request.session, device.key, device.label)
         context.update(result=result, device=device, current_key=device.key if device else "")
+        if result.chromebook:
+            context["wan_on_network"] = Organization.load().on_network(result.chromebook.wan_ip)
 
     context["open_lookups"] = tabs.opened(request.session)
     return render(request, "devices/device360.html", context)

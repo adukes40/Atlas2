@@ -195,3 +195,23 @@ class UsersTests(TestCase):
         self.client.post(url, {"username": "admin", "is_active": "on", "is_superuser": "on",
                                "password1": "harbor-violet-28", "password2": "harbor-violet-28"})
         self.assertEqual(self.client.get(reverse("users")).status_code, 200)
+
+
+class WanIpTests(TestCase):
+    def test_an_address_is_ours_when_it_equals_starts_with_or_falls_in_an_entry(self):
+        organization = Organization(wan_ips="203.0.113.9\n198.51.100\n10.1.\n192.0.2.0/24")
+        for ip, ours in [("203.0.113.9", True), ("203.0.113.99", False), ("198.51.100.7", True), ("198.51.1000.1", False),
+                         ("10.1.4.4", True), ("10.10.4.4", False), ("192.0.2.200", True), ("192.0.3.1", False)]:
+            self.assertEqual(organization.on_network(ip), ours, ip)
+        self.assertIsNone(organization.on_network(""))
+        self.assertIsNone(Organization(wan_ips="").on_network("203.0.113.9"))
+
+    def test_the_setting_is_saved_one_per_line_and_checked(self):
+        admin = User.objects.create_superuser("boss", password="x")
+        self.client.force_login(admin)
+        self.client.post(reverse("settings"), {"name": "Example Schools", "theme": "graphite",
+                                               "wan_ips": " 203.0.113.9 \n\n192.0.2.0/24"})
+        self.assertEqual(Organization.load().wan_ips, "203.0.113.9\n192.0.2.0/24")
+        bad = self.client.post(reverse("settings"), {"name": "Example Schools", "theme": "graphite", "wan_ips": "school wifi"})
+        self.assertContains(bad, "is not an address or the start of one")
+        self.assertEqual(Organization.load().wan_ips, "203.0.113.9\n192.0.2.0/24")

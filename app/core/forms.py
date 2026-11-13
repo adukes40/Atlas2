@@ -1,3 +1,5 @@
+import ipaddress
+
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 
@@ -7,12 +9,31 @@ from .models import Organization
 class OrganizationForm(forms.ModelForm):
     class Meta:
         model = Organization
-        fields = ["name", "theme"]
-        labels = {"name": "Organization name", "theme": "Theme"}
+        fields = ["name", "theme", "wan_ips"]
+        labels = {"name": "Organization name", "theme": "Theme", "wan_ips": "WAN IP"}
+        help_texts = {
+            "wan_ips": "The public addresses your schools reach the internet from, one per line. A device whose "
+                       "WAN IP equals or starts with one of these is on your network; anything else is off it. "
+                       "For example 203.0.113.9, or 198.51.100 for every address starting with it, or 192.0.2.0/24.",
+        }
+        widgets = {"wan_ips": forms.Textarea(attrs={"rows": 4, "spellcheck": "false"})}
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("label_suffix", "")
         super().__init__(*args, **kwargs)
+
+
+    def clean_wan_ips(self):
+        lines = [line.strip() for line in self.cleaned_data["wan_ips"].splitlines() if line.strip()]
+        for line in lines:
+            if "/" in line:
+                try:
+                    ipaddress.ip_network(line, strict=False)
+                except ValueError:
+                    raise forms.ValidationError(f"“{line}” is not an address range Atlas can read.") from None
+            elif not line.strip(".:") or any(c not in "0123456789abcdefABCDEF.:" for c in line):
+                raise forms.ValidationError(f"“{line}” is not an address or the start of one.")
+        return "\n".join(lines)
 
 
 class UserForm(forms.ModelForm):

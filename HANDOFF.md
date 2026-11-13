@@ -68,7 +68,7 @@ Last updated 2026-11-13 (Reports).
 
 12. Reports and the nightly sync (2026-11-13). Layout "A with B's tiles",
     picked by Austin from four mockups: an Overview of count tiles (with a
-    30-day trend once nights accumulate), then a library of 15 reports, each
+    30-day trend once nights accumulate), then a library of 15 reports (14 after "Never on our network" was dropped), each
     one table with filter chips on any field, Columns, Group by, Save as and
     Export CSV. Column headers and group headings carry the accent colour
     (Austin asked for them to stand out). Technicians see every report.
@@ -93,6 +93,49 @@ Last updated 2026-11-13 (Reports).
     Inventory mismatches was dropped as a report the same day (Austin: "those
     can go away"). The `mismatch` field is still worked out each sync, so it
     can be filtered on from any device report or brought back as a report.
+13. Network gear (2026-11-13). Layout "A plus B", picked by Austin from three
+    mockups: a Network gear group of 9 reports (Access points, Access points
+    offline, Switches, Switch ports, Devices on switch ports, Ports with
+    errors, Firmware versions, Wireless networks, Personal Wi-Fi keys), plus a
+    switch page (`reports/switch/<serial>/`) drawn like the faceplate, odd
+    ports on top, with the chosen port's settings and what is plugged in.
+    Switch names in the reports link to it.
+    - The nightly sync adds two steps. "Meraki": networks, device
+      availabilities, devices (switches and MR APs), and per-switch port
+      config, port status and LLDP/CDP neighbors, all org-wide lists paged by
+      Meraki's Link header (`get_json(link=True)`, `MerakiClient.org_list`),
+      about 35 calls. "Mist access points": sites, `/stats/devices?type=ap`,
+      wlans and psks (`MistClient.org_list`), about 5 calls. Each step replaces
+      only its own rows (`NetDevice` by vendor, `SwitchPort`, `Wlan`, `Psk`),
+      so a failed system keeps yesterday's rows and Chromebook reports still
+      rebuild.
+    - `link_gear()` puts each AP on its switch port: the Meraki port whose
+      LLDP chassis MAC is the AP's MAC, else the switch and port the Mist AP
+      reports itself (`lldp_stat`, for non-Meraki switches). The port's
+      neighbor name is then set to the AP's name (Meraki often only has its MAC).
+    - PSK passphrases are never read into Atlas; only name, SSID, role, VLAN
+      and expiry.
+    - Meraki MR APs are included (Austin had not said whether they are
+      retiring); filter Vendor to drop them.
+    - Filter chips open for editing: click one to change its operation or
+      value in place (`replace` on the add-filter request), no remove and re-add.
+      "Never on our network" was dropped (Austin, same day).
+    - Each platform syncs on its own (Austin: "should not need to run full
+      scans on everything just to update one platform"). Sync now, on Reports
+      and System, opens a menu: tick Google, Incident IQ, Mist or Meraki, or
+      Sync everything. `SyncRun.systems` holds the choice (blank is all, as
+      the nightly run is). A platform not asked for is rebuilt from the copy
+      as it stands (`sync.KEEP`, `_iiq_from_copy`, `_google_from_copy`), so a
+      Google-only run makes no Incident IQ calls and keeps assignments. A
+      second request joins one still waiting. "Data as of" is now the oldest
+      platform's copy (`sync.as_of()`), and the menu shows each one's time.
+    - WAN IP setting (Settings, Organization): one per line, an address, the
+      start of one (`198.51.100` matches `198.51.100.x`, not `198.51.1000`),
+      or a range like `192.0.2.0/24`. `Organization.on_network(ip)`. Device 360
+      tags Google's last WAN IP "On our network" or "Off network". The sync
+      keeps Google's WAN IP (`Device.wan_ip`) and works out `off_network` on
+      every rebuild, so after changing the setting, any Sync now updates it.
+      Filter fields "Last WAN IP" and "Off our network (by WAN IP)". 147 tests.
 
 ## How the three new connections work
 
@@ -122,9 +165,13 @@ Last updated 2026-11-13 (Reports).
   in "Lost but still online" (lost, stolen, missing, retired, dispos), role
   "Student", and "student" OU / "staff" policy in "Wrong network" are
   guesses the chips let anyone change.
-- Meraki is not in the nightly copy: Chromebooks are on Mist Wi-Fi, and
-  Meraki's network client list pages by Link headers that `get_json` does
-  not expose.
+- Meraki Wi-Fi clients are not in the nightly copy: Chromebooks are on Mist
+  Wi-Fi. Meraki's switches, ports and APs are (item 13).
+- Network gear against the live systems. Meraki's port config, status and
+  LLDP shapes and Mist's AP, wlan shapes were read live on 2026-11-13; Mist's
+  `num_clients` and `lldp_stat` in the org device stats, and the PSK list
+  fields, are from the API docs. Meraki per-port PoE watts are not in the
+  org-wide status list, so PoE draw shows only for Mist APs.
 
 - Open tickets (confirmed on the live site 2026-11-13): Incident IQ files
   tickets under the person, its `OpenTickets`/`HasOpenTickets` on the asset
