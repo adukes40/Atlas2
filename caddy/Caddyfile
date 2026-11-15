@@ -1,0 +1,18 @@
+# Serves Atlas over HTTPS at ATLAS_HTTPS_HOST with a Let's Encrypt
+# certificate, proven through IONOS DNS (the DNS-01 challenge). Caddy renews
+# it by itself. Plain http:// is redirected to https://.
+#
+# Using another DNS host: add its plugin in caddy/Dockerfile
+# (https://github.com/caddy-dns) and change the "dns" line below.
+
+{$ATLAS_HTTPS_HOST} {
+	tls {
+		dns ionos {env.ATLAS_DNS_API_TOKEN}
+		# Many school networks only allow DNS through their own resolvers, so
+		# instead of asking IONOS's nameservers whether the record is live,
+		# wait two minutes and let Let's Encrypt check.
+		propagation_delay 2m
+		propagation_timeout -1
+	}
+	reverse_proxy web:8000
+}

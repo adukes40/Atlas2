@@ -22,6 +22,8 @@ ENV_EXAMPLE="$ATLAS_DIR/.env.example"
 MIN_FREE_GB=4
 EXTRA_HOSTS=()
 CHECK_ONLY=0
+HTTPS_FLAG=""   # --https NAME, or "off"
+HTTPS_HOST=""   # the HTTPS name in effect for this run
 
 # ── Output ─────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,10 @@ Usage: sudo ./install.sh [options]
   --host NAME   Also accept this name or address in the browser, for example
                 atlas.example.org. Repeat for more than one. The server's own
                 hostname and IP addresses are added automatically.
+  --https NAME  Serve Atlas over HTTPS at NAME, for example atlas.example.org,
+                with a free certificate proven through IONOS DNS. Asks for
+                the IONOS API key the first time. Remembered in .env, so
+                later runs keep it. "--https off" goes back to plain HTTP.
   --check       Only check that this server is ready. Changes nothing.
   -h, --help    Show this help.
 EOF
@@ -97,6 +103,7 @@ detect_hosts() {
                | awk '$2 !~ /^(docker|br-|veth)/ {print $4}' | cut -d/ -f1)
   fi
   hosts+=("${EXTRA_HOSTS[@]}")
+  [[ -n "$HTTPS_HOST" ]] && hosts+=("$HTTPS_HOST")
   # Unique, order kept, comma separated.
   printf '%s\n' "${hosts[@]}" | awk 'NF && !seen[$0]++' | paste -sd, -
 }
@@ -158,6 +165,32 @@ prepare_env() {
   [[ -n "$(env_get POSTGRES_USER)" ]] || env_set POSTGRES_USER atlas
   [[ -n "$(env_get ATLAS_PORT)" ]]    || env_set ATLAS_PORT 8000
 
+  if [[ -n "$HTTPS_HOST" ]]; then
+    env_set ATLAS_HTTPS_HOST "$HTTPS_HOST"
+    if [[ -z "$(env_get ATLAS_DNS_API_TOKEN)" ]]; then
+      [[ -t 0 ]] || die "HTTPS needs an IONOS API key. Put it in .env as ATLAS_DNS_API_TOKEN=prefix.secret and run this again."
+      local token=""
+      read -rsp "  IONOS API key (prefix.secret, not shown): " token; printf '\n'
+      [[ "$token" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] \
+        || die "That does not look like an IONOS API key. It is the public prefix, a dot, then the secret."
+      env_set ATLAS_DNS_API_TOKEN "$token"
+      ok "Saved the IONOS API key"
+    else
+      ok "IONOS API key already set; not changed"
+    fi
+    env_set COMPOSE_PROFILES https
+    env_set ATLAS_BIND 127.0.0.1
+    local origins
+    origins="$(printf '%s,https://%s\n' "$(env_get DJANGO_CSRF_TRUSTED_ORIGINS)" "$HTTPS_HOST" \
+               | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)"
+    env_set DJANGO_CSRF_TRUSTED_ORIGINS "$origins"
+    ok "HTTPS on at https://$HTTPS_HOST; port $(env_get ATLAS_PORT) now answers only on this server"
+  else
+    [[ "$HTTPS_FLAG" == "off" ]] && env_set ATLAS_HTTPS_HOST ""
+    env_set COMPOSE_PROFILES ""
+    env_set ATLAS_BIND 0.0.0.0
+  fi
+
   local hosts
   hosts="$(merge_allowed_hosts)"
   env_set DJANGO_ALLOWED_HOSTS "$hosts"
@@ -175,6 +208,10 @@ prepare_env() {
 
 docker_ready() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
+}
+
+atlas_https_running() {
+  docker_ready && [[ -n "$(cd "$ATLAS_DIR" && docker compose ps -q caddy 2>/dev/null)" ]]
 }
 
 atlas_running() {
@@ -245,6 +282,25 @@ preflight() {
     fail "Port $port is already in use by something else. Set ATLAS_PORT in .env to a free port."
   else
     ok "Port $port is free"
+  fi
+
+  if [[ -n "$HTTPS_HOST" ]]; then
+    if ! atlas_https_running && command -v ss >/dev/null 2>&1; then
+      for port in 80 443; do
+        if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
+          fail "HTTPS needs port $port, and something else is using it."
+        fi
+      done
+    fi
+    local resolved
+    resolved="$(getent ahostsv4 "$HTTPS_HOST" 2>/dev/null | awk 'NR==1 {print $1}' || true)"
+    if [[ -z "$resolved" ]]; then
+      note "$HTTPS_HOST does not resolve yet. Add a DNS A record pointing it at this server, or browsers will not find it."
+    elif ! ip -4 -o addr show 2>/dev/null | grep -qF " $resolved/"; then
+      note "$HTTPS_HOST points at $resolved, which is not an address of this server."
+    else
+      ok "$HTTPS_HOST points at this server ($resolved)"
+    fi
   fi
 
   if command -v timedatectl >/dev/null 2>&1 \
@@ -330,6 +386,8 @@ EOF
 start_atlas() {
   step "Building and starting Atlas"
   cd "$ATLAS_DIR"
+  # Compose leaves a service of a profile no longer in use running.
+  if [[ -z "$HTTPS_HOST" ]]; then docker compose rm -sf caddy >/dev/null 2>&1 || true; fi
   docker compose up -d --build
 
   local port url tries=0
@@ -347,6 +405,22 @@ start_atlas() {
   done
   printf '\n'
   ok "Atlas is up and its database is reachable"
+
+  [[ -n "$HTTPS_HOST" ]] || return 0
+  tries=0
+  printf '  Waiting for the HTTPS certificate (the first one takes about three minutes)'
+  until curl -fsS --max-time 5 -o /dev/null --resolve "$HTTPS_HOST:443:127.0.0.1" \
+          "https://$HTTPS_HOST/healthz/" 2>/dev/null; do
+    tries=$((tries + 1))
+    if (( tries > 60 )); then
+      printf '\n'
+      note "No certificate yet. See why with: sudo docker compose logs caddy"
+      return 0
+    fi
+    printf '.'; sleep 5
+  done
+  printf '\n'
+  ok "https://$HTTPS_HOST has a trusted certificate"
 }
 
 first_admin() {
@@ -375,10 +449,14 @@ finish() {
   hosts="$(env_get DJANGO_ALLOWED_HOSTS)"
 
   printf '\n%sAtlas is installed.%s Open it in a browser at:\n\n' "$BOLD$GREEN" "$RESET"
-  while read -r host; do
-    case "$host" in localhost|127.0.0.1|"") continue ;; esac
-    printf '    http://%s:%s\n' "$host" "$port"
-  done < <(printf '%s\n' "$hosts" | tr ',' '\n')
+  if [[ -n "$HTTPS_HOST" ]]; then
+    printf '    https://%s\n' "$HTTPS_HOST"
+  else
+    while read -r host; do
+      case "$host" in localhost|127.0.0.1|"") continue ;; esac
+      printf '    http://%s:%s\n' "$host" "$port"
+    done < <(printf '%s\n' "$hosts" | tr ',' '\n')
+  fi
 
   cat <<EOF
 
@@ -386,10 +464,12 @@ To update later:   cd $ATLAS_DIR && git pull && sudo ./install.sh
 To see the logs:   sudo docker compose logs -f web
 Reports sync log:  sudo docker compose logs -f sync
 To stop Atlas:     sudo docker compose down     (your data is kept)
-
-Atlas is served over plain HTTP. Keep it on a trusted network until HTTPS
-is added.
 EOF
+  if [[ -n "$HTTPS_HOST" ]]; then
+    echo "HTTPS log:         sudo docker compose logs -f caddy"
+  else
+    printf '\nAtlas is served over plain HTTP. To add HTTPS: sudo ./install.sh --https atlas.example.org\n'
+  fi
 }
 
 main() {
@@ -397,6 +477,8 @@ main() {
     case "$1" in
       --host)   [[ $# -ge 2 ]] || die "--host needs a name or address after it."; EXTRA_HOSTS+=("$2"); shift 2 ;;
       --host=*) EXTRA_HOSTS+=("${1#--host=}"); shift ;;
+      --https)  [[ $# -ge 2 ]] || die "--https needs a name after it, or 'off'."; HTTPS_FLAG="$2"; shift 2 ;;
+      --https=*) HTTPS_FLAG="${1#--https=}"; shift ;;
       --check)  CHECK_ONLY=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage >&2; die "Unknown option: $1" ;;
@@ -407,6 +489,16 @@ main() {
   for h in "${EXTRA_HOSTS[@]}"; do
     [[ "$h" =~ ^[A-Za-z0-9._-]+$ ]] || die "'$h' is not a host name or IPv4 address. Leave out http:// and any port."
   done
+
+  case "$HTTPS_FLAG" in
+    off) HTTPS_HOST="" ;;
+    "")  HTTPS_HOST="$(env_get ATLAS_HTTPS_HOST)" ;;
+    *)   HTTPS_HOST="$HTTPS_FLAG" ;;
+  esac
+  if [[ -n "$HTTPS_HOST" ]]; then
+    [[ "$HTTPS_HOST" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ && ! "$HTTPS_HOST" =~ ^[0-9.]+$ ]] \
+      || die "'$HTTPS_HOST' is not a DNS name. HTTPS needs a full name such as atlas.example.org: no IP address, no https://, no port."
+  fi
 
   printf '%sAtlas installer%s  (%s)\n' "$BOLD" "$RESET" "$ATLAS_DIR"
   preflight
