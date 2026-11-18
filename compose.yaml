@@ -24,7 +24,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${ATLAS_PORT:-8000}:8000"
+      # install.sh sets ATLAS_BIND to 127.0.0.1 when HTTPS is on, so the only
+      # way in from the network is through Caddy.
+      - "${ATLAS_BIND:-0.0.0.0}:${ATLAS_PORT:-8000}:8000"
 
   # The nightly copy for Reports (2:00 AM, ATLAS_SYNC_HOUR and ATLAS_TIME_ZONE
   # in .env change it), plus any "Sync now". Logs: docker compose logs sync
@@ -39,5 +41,25 @@ services:
         condition: service_healthy
     command: ["python", "manage.py", "run_sync_schedule"]
 
+  # HTTPS in front of Atlas. Only runs when COMPOSE_PROFILES=https, which
+  # install.sh sets when ATLAS_HTTPS_HOST is filled in. Logs: docker compose logs caddy
+  caddy:
+    build: ./caddy
+    profiles: ["https"]
+    restart: unless-stopped
+    environment:
+      ATLAS_HTTPS_HOST: ${ATLAS_HTTPS_HOST:-}
+      ATLAS_DNS_API_TOKEN: ${ATLAS_DNS_API_TOKEN:-}
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   db-data:
+  caddy-data:
+  caddy-config:

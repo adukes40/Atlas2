@@ -36,6 +36,26 @@ To only check the server without changing anything: `sudo ./install.sh --check`.
 It is safe to run again. It never replaces a secret that is already set,
 never removes software, and never touches your data.
 
+## HTTPS
+
+Atlas can serve itself over HTTPS with a free, publicly trusted Let's Encrypt
+certificate, so browsers show no warning. The certificate is proven through
+DNS (a temporary TXT record), so the server never has to be reachable from
+the internet. You need:
+
+- A name under a domain whose DNS you control, for example
+  `atlas.example.org`. Today the built-in DNS host is IONOS. Others work by
+  swapping the plugin in `caddy/Dockerfile` and the `dns` line in
+  `caddy/Caddyfile` for one from https://github.com/caddy-dns.
+- An API key from that DNS host (for IONOS: the public prefix and secret,
+  joined by a dot).
+- A DNS A record pointing the name at the server's internal IP address.
+
+Then run `sudo ./install.sh --https atlas.example.org`. It asks for the API
+key once, starts Caddy on ports 80 and 443, and waits for the certificate.
+Caddy renews it by itself. After that, Atlas's own port answers only on the
+server itself, and `sudo ./install.sh --https off` goes back to plain HTTP.
+
 ## Connect Incident IQ
 
 Sign in as an administrator, open Settings, choose Incident IQ, and enter your
