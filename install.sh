@@ -178,6 +178,9 @@ prepare_env() {
     else
       ok "IONOS API key already set; not changed"
     fi
+    case "$(env_get ATLAS_PORT)" in
+      80|443) env_set ATLAS_PORT 8000; ok "Moved Atlas's own port to 8000 so Caddy can use 80 and 443" ;;
+    esac
     env_set COMPOSE_PROFILES https
     env_set ATLAS_BIND 127.0.0.1
     local origins
@@ -287,6 +290,8 @@ preflight() {
   if [[ -n "$HTTPS_HOST" ]]; then
     if ! atlas_https_running && command -v ss >/dev/null 2>&1; then
       for port in 80 443; do
+        # Atlas itself on 80 or 443 is moved to 8000 below, which frees the port.
+        if [[ "$port" == "$(env_get ATLAS_PORT)" ]] && atlas_running; then continue; fi
         if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
           fail "HTTPS needs port $port, and something else is using it."
         fi
