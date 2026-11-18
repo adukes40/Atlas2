@@ -76,7 +76,8 @@ sudo iptables -I DOCKER-USER -p tcp --dport 8000 ! -s <proxy IP> -j DROP
 ```
 
 (Docker's published ports skip ufw, so the rule goes in the `DOCKER-USER`
-chain. Save it with `iptables-persistent` so it survives a reboot.)
+chain. To keep it after a reboot, run it from a small systemd unit ordered
+`After=docker.service`.)
 `sudo ./install.sh --proxy builtin` goes back to Atlas's own Caddy.
 
 ## Connect Incident IQ
