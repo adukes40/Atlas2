@@ -5,7 +5,12 @@
   <div class="card">
     <p class="brand-app">ATLAS</p>
     <h1>{{ org.name }}</h1>
-    <form method="post">
+    {% if sso_error %}<ul class="errorlist field" role="alert"><li>{{ sso_error }}</li></ul>{% endif %}
+    {% if classlink_on %}
+    <a class="btn signin-sso" href="{% url 'saml-start' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign in with ClassLink</a>
+    <p class="signin-or">or use your Atlas password</p>
+    {% endif %}
+    <form method="post" action="{% url 'login' %}">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ next }}">
       {% if form.errors %}<ul class="errorlist field" role="alert"><li>That username and password did not match. Try again.</li></ul>{% endif %}

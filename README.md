@@ -93,6 +93,27 @@ site address and an API token. "Save and test" tells you straight away whether
 it worked. The token is stored encrypted and is never shown again. Atlas only
 reads from Incident IQ.
 
+## ClassLink sign-in (SAML)
+
+Staff can sign in with ClassLink instead of an Atlas password. ClassLink never
+has to reach the server: every step passes through the person's browser, so
+this works on a private network. Use HTTPS first, because ClassLink's
+addresses for Atlas are built from the HTTPS name.
+
+1. In Atlas, open Settings, then ClassLink sign-in. Note the Entity ID and
+   ACS URL, or download Atlas's metadata.
+2. In the ClassLink Management Console, open Single Sign-On, SAML Console,
+   and add a new app. Paste Atlas's metadata (or the Entity ID and ACS URL),
+   and map the attributes `email` to Email, `firstName` to Given Name and
+   `lastName` to Family Name. Assign the app to the staff who should use Atlas.
+3. Copy ClassLink's IdP metadata (the XML, or its metadata URL) back into
+   Atlas, tick "Turn on ClassLink sign-in" and save.
+
+People are matched to existing Atlas users by email. With "Create accounts
+for new people" on, anyone else ClassLink signs in gets a Technician account;
+make someone an Administrator on the Users screen. Password sign-in always
+stays available, so keep at least one administrator with a password.
+
 ## Update
 
 ```

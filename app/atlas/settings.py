@@ -31,9 +31,12 @@ ATLAS_ENCRYPTION_KEY = os.environ.get("ATLAS_ENCRYPTION_KEY", "")
 ALLOWED_HOSTS = _list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = _list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
+# The name Atlas is served at over HTTPS; also used for ClassLink's addresses.
+ATLAS_HTTPS_HOST = os.environ.get("ATLAS_HTTPS_HOST", "")
+
 # Behind Caddy (see caddy/Caddyfile). Trusting X-Forwarded-Proto is safe only
 # because install.sh then publishes Atlas's own port on 127.0.0.1 alone.
-if os.environ.get("ATLAS_HTTPS_HOST"):
+if ATLAS_HTTPS_HOST:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
 
@@ -47,6 +50,7 @@ INSTALLED_APPS = [
     "integrations",
     "devices",
     "reports",
+    "sso",
 ]
 
 MIDDLEWARE = [
