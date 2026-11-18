@@ -56,6 +56,29 @@ key once, starts Caddy on ports 80 and 443, and waits for the certificate.
 Caddy renews it by itself. After that, Atlas's own port answers only on the
 server itself, and `sudo ./install.sh --https off` goes back to plain HTTP.
 
+### Behind your own HTTPS proxy
+
+If a central proxy (Caddy, nginx, and so on) already serves your apps, let it
+handle HTTPS instead:
+
+```
+sudo ./install.sh --https atlas.example.org --proxy external
+```
+
+Atlas's own Caddy stays off, no API key is needed, and port 8000 stays open
+on the network so the proxy can reach it. The proxy must forward to
+`http://<this server>:8000`, keep the `Host` header, and send
+`X-Forwarded-Proto: https` (Caddy's `reverse_proxy` does all of this by
+default). Then allow only the proxy to reach port 8000, for example:
+
+```
+sudo iptables -I DOCKER-USER -p tcp --dport 8000 ! -s <proxy IP> -j DROP
+```
+
+(Docker's published ports skip ufw, so the rule goes in the `DOCKER-USER`
+chain. Save it with `iptables-persistent` so it survives a reboot.)
+`sudo ./install.sh --proxy builtin` goes back to Atlas's own Caddy.
+
 ## Connect Incident IQ
 
 Sign in as an administrator, open Settings, choose Incident IQ, and enter your

@@ -24,6 +24,8 @@ EXTRA_HOSTS=()
 CHECK_ONLY=0
 HTTPS_FLAG=""   # --https NAME, or "off"
 HTTPS_HOST=""   # the HTTPS name in effect for this run
+PROXY_FLAG=""   # --proxy external|builtin
+PROXY=""        # who serves HTTPS this run: "builtin" (Atlas's Caddy) or "external"
 
 # ── Output ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,11 @@ Usage: sudo ./install.sh [options]
                 with a free certificate proven through IONOS DNS. Asks for
                 the IONOS API key the first time. Remembered in .env, so
                 later runs keep it. "--https off" goes back to plain HTTP.
+  --proxy external
+                Another HTTPS proxy (such as a central Caddy server) serves
+                the --https name and forwards to this server's port. Atlas's
+                own Caddy stays off and no API key is needed. Remembered in
+                .env. "--proxy builtin" goes back to Atlas's own Caddy.
   --check       Only check that this server is ready. Changes nothing.
   -h, --help    Show this help.
 EOF
@@ -165,7 +172,13 @@ prepare_env() {
   [[ -n "$(env_get POSTGRES_USER)" ]] || env_set POSTGRES_USER atlas
   [[ -n "$(env_get ATLAS_PORT)" ]]    || env_set ATLAS_PORT 8000
 
-  if [[ -n "$HTTPS_HOST" ]]; then
+  env_set ATLAS_PROXY "$PROXY"
+  if [[ -n "$HTTPS_HOST" && "$PROXY" == external ]]; then
+    env_set ATLAS_HTTPS_HOST "$HTTPS_HOST"
+    env_set COMPOSE_PROFILES ""
+    # The outside proxy has to reach this port over the network.
+    env_set ATLAS_BIND 0.0.0.0
+  elif [[ -n "$HTTPS_HOST" ]]; then
     env_set ATLAS_HTTPS_HOST "$HTTPS_HOST"
     if [[ -z "$(env_get ATLAS_DNS_API_TOKEN)" ]]; then
       [[ -t 0 ]] || die "HTTPS needs an IONOS API key. Put it in .env as ATLAS_DNS_API_TOKEN=prefix.secret and run this again."
@@ -180,15 +193,21 @@ prepare_env() {
     fi
     env_set COMPOSE_PROFILES https
     env_set ATLAS_BIND 127.0.0.1
-    local origins
-    origins="$(printf '%s,https://%s\n' "$(env_get DJANGO_CSRF_TRUSTED_ORIGINS)" "$HTTPS_HOST" \
-               | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)"
-    env_set DJANGO_CSRF_TRUSTED_ORIGINS "$origins"
-    ok "HTTPS on at https://$HTTPS_HOST; port $(env_get ATLAS_PORT) now answers only on this server"
   else
     [[ "$HTTPS_FLAG" == "off" ]] && env_set ATLAS_HTTPS_HOST ""
     env_set COMPOSE_PROFILES ""
     env_set ATLAS_BIND 0.0.0.0
+  fi
+  if [[ -n "$HTTPS_HOST" ]]; then
+    local origins
+    origins="$(printf '%s,https://%s\n' "$(env_get DJANGO_CSRF_TRUSTED_ORIGINS)" "$HTTPS_HOST" \
+               | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)"
+    env_set DJANGO_CSRF_TRUSTED_ORIGINS "$origins"
+    if [[ "$PROXY" == external ]]; then
+      ok "HTTPS at https://$HTTPS_HOST comes from your own proxy; it should forward to port $(env_get ATLAS_PORT) with X-Forwarded-Proto: https"
+    else
+      ok "HTTPS on at https://$HTTPS_HOST; port $(env_get ATLAS_PORT) now answers only on this server"
+    fi
   fi
 
   local hosts
@@ -284,7 +303,7 @@ preflight() {
     ok "Port $port is free"
   fi
 
-  if [[ -n "$HTTPS_HOST" ]]; then
+  if [[ -n "$HTTPS_HOST" && "$PROXY" == builtin ]]; then
     if ! atlas_https_running && command -v ss >/dev/null 2>&1; then
       for port in 80 443; do
         if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
@@ -387,7 +406,7 @@ start_atlas() {
   step "Building and starting Atlas"
   cd "$ATLAS_DIR"
   # Compose leaves a service of a profile no longer in use running.
-  if [[ -z "$HTTPS_HOST" ]]; then docker compose rm -sf caddy >/dev/null 2>&1 || true; fi
+  if [[ -z "$HTTPS_HOST" || "$PROXY" == external ]]; then docker compose rm -sf caddy >/dev/null 2>&1 || true; fi
   docker compose up -d --build
 
   local port url tries=0
@@ -406,7 +425,7 @@ start_atlas() {
   printf '\n'
   ok "Atlas is up and its database is reachable"
 
-  [[ -n "$HTTPS_HOST" ]] || return 0
+  [[ -n "$HTTPS_HOST" && "$PROXY" == builtin ]] || return 0
   tries=0
   printf '  Waiting for the HTTPS certificate (the first one takes about three minutes)'
   until curl -fsS --max-time 5 -o /dev/null --resolve "$HTTPS_HOST:443:127.0.0.1" \
@@ -465,7 +484,9 @@ To see the logs:   sudo docker compose logs -f web
 Reports sync log:  sudo docker compose logs -f sync
 To stop Atlas:     sudo docker compose down     (your data is kept)
 EOF
-  if [[ -n "$HTTPS_HOST" ]]; then
+  if [[ "$PROXY" == external ]]; then
+    printf '\nHTTPS comes from your own proxy. Allow only that proxy to reach port %s here.\n' "$port"
+  elif [[ -n "$HTTPS_HOST" ]]; then
     echo "HTTPS log:         sudo docker compose logs -f caddy"
   else
     printf '\nAtlas is served over plain HTTP. To add HTTPS: sudo ./install.sh --https atlas.example.org\n'
@@ -479,6 +500,8 @@ main() {
       --host=*) EXTRA_HOSTS+=("${1#--host=}"); shift ;;
       --https)  [[ $# -ge 2 ]] || die "--https needs a name after it, or 'off'."; HTTPS_FLAG="$2"; shift 2 ;;
       --https=*) HTTPS_FLAG="${1#--https=}"; shift ;;
+      --proxy)  [[ $# -ge 2 ]] || die "--proxy needs 'external' or 'builtin' after it."; PROXY_FLAG="$2"; shift 2 ;;
+      --proxy=*) PROXY_FLAG="${1#--proxy=}"; shift ;;
       --check)  CHECK_ONLY=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage >&2; die "Unknown option: $1" ;;
@@ -499,6 +522,13 @@ main() {
     [[ "$HTTPS_HOST" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ && ! "$HTTPS_HOST" =~ ^[0-9.]+$ ]] \
       || die "'$HTTPS_HOST' is not a DNS name. HTTPS needs a full name such as atlas.example.org: no IP address, no https://, no port."
   fi
+  PROXY="${PROXY_FLAG:-$(env_get ATLAS_PROXY)}"
+  # "--https off" alone also leaves an outside proxy behind.
+  [[ -z "$HTTPS_HOST" && -z "$PROXY_FLAG" ]] && PROXY=builtin
+  PROXY="${PROXY:-builtin}"
+  [[ "$PROXY" == builtin || "$PROXY" == external ]] || die "--proxy must be 'external' or 'builtin', not '$PROXY'."
+  [[ "$PROXY" == builtin || -n "$HTTPS_HOST" ]] \
+    || die "--proxy external needs the name people will type: add --https atlas.example.org."
 
   printf '%sAtlas installer%s  (%s)\n' "$BOLD" "$RESET" "$ATLAS_DIR"
   preflight

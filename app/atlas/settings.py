@@ -31,8 +31,10 @@ ATLAS_ENCRYPTION_KEY = os.environ.get("ATLAS_ENCRYPTION_KEY", "")
 ALLOWED_HOSTS = _list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = _list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-# Behind Caddy (see caddy/Caddyfile). Trusting X-Forwarded-Proto is safe only
-# because install.sh then publishes Atlas's own port on 127.0.0.1 alone.
+# Behind Caddy (see caddy/Caddyfile) or, with ATLAS_PROXY=external, behind your
+# own HTTPS proxy. Trusting X-Forwarded-Proto is safe only while that proxy is
+# the one way in: install.sh binds the port to 127.0.0.1 for the built-in Caddy;
+# for an outside proxy, firewall the port to that proxy's address.
 if os.environ.get("ATLAS_HTTPS_HOST"):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
