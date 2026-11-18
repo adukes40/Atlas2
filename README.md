@@ -56,6 +56,11 @@ key once, starts Caddy on ports 80 and 443, and waits for the certificate.
 Caddy renews it by itself. After that, Atlas's own port answers only on the
 server itself, and `sudo ./install.sh --https off` goes back to plain HTTP.
 
+If a firewall between users and the server blocks port 443, add
+`--https-port 8443` (or any port it allows). The certificate is proven through
+DNS, so it does not need 443, and the address becomes
+`https://atlas.example.org:8443`.
+
 ## Connect Incident IQ
 
 Sign in as an administrator, open Settings, choose Incident IQ, and enter your

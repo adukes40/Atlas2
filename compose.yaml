@@ -49,12 +49,13 @@ services:
     restart: unless-stopped
     environment:
       ATLAS_HTTPS_HOST: ${ATLAS_HTTPS_HOST:-}
+      ATLAS_HTTPS_PORT: ${ATLAS_HTTPS_PORT:-443}
       ATLAS_DNS_API_TOKEN: ${ATLAS_DNS_API_TOKEN:-}
     depends_on:
       - web
     ports:
       - "80:80"
-      - "443:443"
+      - "${ATLAS_HTTPS_PORT:-443}:${ATLAS_HTTPS_PORT:-443}"
     volumes:
       - caddy-data:/data
       - caddy-config:/config

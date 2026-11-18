@@ -23,6 +23,9 @@ MIN_FREE_GB=4
 EXTRA_HOSTS=()
 CHECK_ONLY=0
 HTTPS_FLAG=""   # --https NAME, or "off"
+HTTPS_PORT_FLAG=""
+HTTPS_PORT=443
+HTTPS_URL=""
 HTTPS_HOST=""   # the HTTPS name in effect for this run
 
 # ── Output ─────────────────────────────────────────────────────────────────
@@ -52,6 +55,8 @@ Usage: sudo ./install.sh [options]
                 with a free certificate proven through IONOS DNS. Asks for
                 the IONOS API key the first time. Remembered in .env, so
                 later runs keep it. "--https off" goes back to plain HTTP.
+  --https-port N  Serve HTTPS on port N instead of 443, for networks whose
+                firewall blocks 443. The address becomes https://NAME:N.
   --check       Only check that this server is ready. Changes nothing.
   -h, --help    Show this help.
 EOF
@@ -178,16 +183,21 @@ prepare_env() {
     else
       ok "IONOS API key already set; not changed"
     fi
-    case "$(env_get ATLAS_PORT)" in
-      80|443) env_set ATLAS_PORT 8000; ok "Moved Atlas's own port to 8000 so Caddy can use 80 and 443" ;;
-    esac
+    env_set ATLAS_HTTPS_PORT "$HTTPS_PORT"
+    local own
+    own="$(env_get ATLAS_PORT)"
+    if [[ "$own" == 80 || "$own" == "$HTTPS_PORT" ]]; then
+      own=8000; [[ "$HTTPS_PORT" == 8000 ]] && own=8001
+      env_set ATLAS_PORT "$own"
+      ok "Moved Atlas's own port to $own so Caddy can use 80 and $HTTPS_PORT"
+    fi
     env_set COMPOSE_PROFILES https
     env_set ATLAS_BIND 127.0.0.1
     local origins
-    origins="$(printf '%s,https://%s\n' "$(env_get DJANGO_CSRF_TRUSTED_ORIGINS)" "$HTTPS_HOST" \
+    origins="$(printf '%s,%s\n' "$(env_get DJANGO_CSRF_TRUSTED_ORIGINS)" "$HTTPS_URL" \
                | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)"
     env_set DJANGO_CSRF_TRUSTED_ORIGINS "$origins"
-    ok "HTTPS on at https://$HTTPS_HOST; port $(env_get ATLAS_PORT) now answers only on this server"
+    ok "HTTPS on at $HTTPS_URL; port $(env_get ATLAS_PORT) now answers only on this server"
   else
     [[ "$HTTPS_FLAG" == "off" ]] && env_set ATLAS_HTTPS_HOST ""
     env_set COMPOSE_PROFILES ""
@@ -289,8 +299,8 @@ preflight() {
 
   if [[ -n "$HTTPS_HOST" ]]; then
     if ! atlas_https_running && command -v ss >/dev/null 2>&1; then
-      for port in 80 443; do
-        # Atlas itself on 80 or 443 is moved to 8000 below, which frees the port.
+      for port in 80 "$HTTPS_PORT"; do
+        # Atlas itself on one of these is moved below, which frees the port.
         if [[ "$port" == "$(env_get ATLAS_PORT)" ]] && atlas_running; then continue; fi
         if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
           fail "HTTPS needs port $port, and something else is using it."
@@ -414,8 +424,8 @@ start_atlas() {
   [[ -n "$HTTPS_HOST" ]] || return 0
   tries=0
   printf '  Waiting for the HTTPS certificate (the first one takes about three minutes)'
-  until curl -fsS --max-time 5 -o /dev/null --resolve "$HTTPS_HOST:443:127.0.0.1" \
-          "https://$HTTPS_HOST/healthz/" 2>/dev/null; do
+  until curl -fsS --max-time 5 -o /dev/null --resolve "$HTTPS_HOST:$HTTPS_PORT:127.0.0.1" \
+          "$HTTPS_URL/healthz/" 2>/dev/null; do
     tries=$((tries + 1))
     if (( tries > 60 )); then
       printf '\n'
@@ -425,7 +435,7 @@ start_atlas() {
     printf '.'; sleep 5
   done
   printf '\n'
-  ok "https://$HTTPS_HOST has a trusted certificate"
+  ok "$HTTPS_URL has a trusted certificate"
 }
 
 first_admin() {
@@ -455,7 +465,7 @@ finish() {
 
   printf '\n%sAtlas is installed.%s Open it in a browser at:\n\n' "$BOLD$GREEN" "$RESET"
   if [[ -n "$HTTPS_HOST" ]]; then
-    printf '    https://%s\n' "$HTTPS_HOST"
+    printf '    %s\n' "$HTTPS_URL"
   else
     while read -r host; do
       case "$host" in localhost|127.0.0.1|"") continue ;; esac
@@ -484,6 +494,8 @@ main() {
       --host=*) EXTRA_HOSTS+=("${1#--host=}"); shift ;;
       --https)  [[ $# -ge 2 ]] || die "--https needs a name after it, or 'off'."; HTTPS_FLAG="$2"; shift 2 ;;
       --https=*) HTTPS_FLAG="${1#--https=}"; shift ;;
+      --https-port) [[ $# -ge 2 ]] || die "--https-port needs a port number after it."; HTTPS_PORT_FLAG="$2"; shift 2 ;;
+      --https-port=*) HTTPS_PORT_FLAG="${1#--https-port=}"; shift ;;
       --check)  CHECK_ONLY=1; shift ;;
       -h|--help) usage; exit 0 ;;
       *) usage >&2; die "Unknown option: $1" ;;
@@ -503,6 +515,11 @@ main() {
   if [[ -n "$HTTPS_HOST" ]]; then
     [[ "$HTTPS_HOST" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ && ! "$HTTPS_HOST" =~ ^[0-9.]+$ ]] \
       || die "'$HTTPS_HOST' is not a DNS name. HTTPS needs a full name such as atlas.example.org: no IP address, no https://, no port."
+    HTTPS_PORT="${HTTPS_PORT_FLAG:-$(env_get ATLAS_HTTPS_PORT)}"; HTTPS_PORT="${HTTPS_PORT:-443}"
+    if ! [[ "$HTTPS_PORT" =~ ^[0-9]{1,5}$ ]] || (( HTTPS_PORT < 1 || HTTPS_PORT > 65535 || HTTPS_PORT == 80 )); then
+      die "'$HTTPS_PORT' is not a usable HTTPS port. Pick 443, or a free port such as 8443."
+    fi
+    HTTPS_URL="https://$HTTPS_HOST"; [[ "$HTTPS_PORT" == 443 ]] || HTTPS_URL+=":$HTTPS_PORT"
   fi
 
   printf '%sAtlas installer%s  (%s)\n' "$BOLD" "$RESET" "$ATLAS_DIR"

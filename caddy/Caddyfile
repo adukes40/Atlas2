@@ -5,7 +5,7 @@
 # Using another DNS host: add its plugin in caddy/Dockerfile
 # (https://github.com/caddy-dns) and change the "dns" line below.
 
-{$ATLAS_HTTPS_HOST} {
+{$ATLAS_HTTPS_HOST}:{$ATLAS_HTTPS_PORT:443} {
 	tls {
 		dns ionos {env.ATLAS_DNS_API_TOKEN}
 		# Many school networks only allow DNS through their own resolvers, so
