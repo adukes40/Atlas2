@@ -19,11 +19,14 @@ set -euo pipefail
 ATLAS_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 ENV_FILE="$ATLAS_DIR/.env"
 ENV_EXAMPLE="$ATLAS_DIR/.env.example"
+ROOT_CA_FILE="$ATLAS_DIR/atlas-root-ca.crt"
 MIN_FREE_GB=4
 EXTRA_HOSTS=()
 CHECK_ONLY=0
 HTTPS_FLAG=""   # --https NAME, or "off"
 HTTPS_PORT_FLAG=""
+HTTPS_CERT_FLAG=""
+HTTPS_CERT=letsencrypt
 HTTPS_PORT=443
 HTTPS_URL=""
 HTTPS_HOST=""   # the HTTPS name in effect for this run
@@ -55,6 +58,11 @@ Usage: sudo ./install.sh [options]
                 with a free certificate proven through IONOS DNS. Asks for
                 the IONOS API key the first time. Remembered in .env, so
                 later runs keep it. "--https off" goes back to plain HTTP.
+  --https-cert internal
+                Use Caddy's own certificate authority instead of Let's
+                Encrypt, for a name whose public DNS you do not control.
+                Push the saved atlas-root-ca.crt to your devices once.
+                "--https-cert letsencrypt" goes back.
   --https-port N  Serve HTTPS on port N instead of 443, for networks whose
                 firewall blocks 443. The address becomes https://NAME:N.
   --check       Only check that this server is ready. Changes nothing.
@@ -172,7 +180,10 @@ prepare_env() {
 
   if [[ -n "$HTTPS_HOST" ]]; then
     env_set ATLAS_HTTPS_HOST "$HTTPS_HOST"
-    if [[ -z "$(env_get ATLAS_DNS_API_TOKEN)" ]]; then
+    env_set ATLAS_HTTPS_CERT "$HTTPS_CERT"
+    if [[ "$HTTPS_CERT" == internal ]]; then
+      ok "Certificate from Caddy's own certificate authority"
+    elif [[ -z "$(env_get ATLAS_DNS_API_TOKEN)" ]]; then
       [[ -t 0 ]] || die "HTTPS needs an IONOS API key. Put it in .env as ATLAS_DNS_API_TOKEN=prefix.secret and run this again."
       local token=""
       read -rsp "  IONOS API key (prefix.secret, not shown): " token; printf '\n'
@@ -227,6 +238,14 @@ prepare_env() {
 
 docker_ready() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
+}
+
+# Copy Caddy's root certificate out of its volume (internal certificates
+# only), and have curl trust it.
+save_root_ca() {
+  docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt \
+    > "$ROOT_CA_FILE.tmp" 2>/dev/null && [[ -s "$ROOT_CA_FILE.tmp" ]] \
+    && mv "$ROOT_CA_FILE.tmp" "$ROOT_CA_FILE" && TRUST=(--cacert "$ROOT_CA_FILE")
 }
 
 atlas_https_running() {
@@ -430,8 +449,10 @@ start_atlas() {
   [[ -n "$HTTPS_HOST" ]] || return 0
   tries=0
   printf '  Waiting for the HTTPS certificate (the first one takes about three minutes)'
-  until curl -fsS --max-time 5 -o /dev/null --resolve "$HTTPS_HOST:$HTTPS_PORT:127.0.0.1" \
-          "$HTTPS_URL/healthz/" 2>/dev/null; do
+  TRUST=()
+  until { [[ "$HTTPS_CERT" != internal ]] || save_root_ca; } &&
+        curl -fsS --max-time 5 -o /dev/null "${TRUST[@]}" \
+          --resolve "$HTTPS_HOST:$HTTPS_PORT:127.0.0.1" "$HTTPS_URL/healthz/" 2>/dev/null; do
     tries=$((tries + 1))
     if (( tries > 60 )); then
       printf '\n'
@@ -488,6 +509,14 @@ To stop Atlas:     sudo docker compose down     (your data is kept)
 EOF
   if [[ -n "$HTTPS_HOST" ]]; then
     echo "HTTPS log:         sudo docker compose logs -f caddy"
+    if [[ "$HTTPS_CERT" == internal && -s "$ROOT_CA_FILE" ]]; then
+      printf '\nDevices trust Atlas once they trust its root certificate, saved at\n  %s\n' "$ROOT_CA_FILE"
+      echo "Push it once: on Windows with a GPO (Computer Configuration, Policies,"
+      echo "Windows Settings, Security Settings, Public Key Policies, Trusted Root"
+      echo "Certification Authorities); on Chromebooks in Google Admin (Devices,"
+      echo "Networks, Certificates, with \"Use this certificate as an HTTPS"
+      echo "certificate authority\" checked). It stays the same when you update Atlas."
+    fi
   else
     printf '\nAtlas is served over plain HTTP. To add HTTPS: sudo ./install.sh --https atlas.example.org\n'
   fi
@@ -500,6 +529,8 @@ main() {
       --host=*) EXTRA_HOSTS+=("${1#--host=}"); shift ;;
       --https)  [[ $# -ge 2 ]] || die "--https needs a name after it, or 'off'."; HTTPS_FLAG="$2"; shift 2 ;;
       --https=*) HTTPS_FLAG="${1#--https=}"; shift ;;
+      --https-cert) [[ $# -ge 2 ]] || die "--https-cert needs 'internal' or 'letsencrypt' after it."; HTTPS_CERT_FLAG="$2"; shift 2 ;;
+      --https-cert=*) HTTPS_CERT_FLAG="${1#--https-cert=}"; shift ;;
       --https-port) [[ $# -ge 2 ]] || die "--https-port needs a port number after it."; HTTPS_PORT_FLAG="$2"; shift 2 ;;
       --https-port=*) HTTPS_PORT_FLAG="${1#--https-port=}"; shift ;;
       --check)  CHECK_ONLY=1; shift ;;
@@ -521,6 +552,9 @@ main() {
   if [[ -n "$HTTPS_HOST" ]]; then
     [[ "$HTTPS_HOST" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ && ! "$HTTPS_HOST" =~ ^[0-9.]+$ ]] \
       || die "'$HTTPS_HOST' is not a DNS name. HTTPS needs a full name such as atlas.example.org: no IP address, no https://, no port."
+    HTTPS_CERT="${HTTPS_CERT_FLAG:-$(env_get ATLAS_HTTPS_CERT)}"; HTTPS_CERT="${HTTPS_CERT:-letsencrypt}"
+    [[ "$HTTPS_CERT" == letsencrypt || "$HTTPS_CERT" == internal ]] \
+      || die "--https-cert is 'letsencrypt' or 'internal', not '$HTTPS_CERT'."
     HTTPS_PORT="${HTTPS_PORT_FLAG:-$(env_get ATLAS_HTTPS_PORT)}"; HTTPS_PORT="${HTTPS_PORT:-443}"
     if ! [[ "$HTTPS_PORT" =~ ^[0-9]{1,5}$ ]] || (( HTTPS_PORT < 1 || HTTPS_PORT > 65535 || HTTPS_PORT == 80 )); then
       die "'$HTTPS_PORT' is not a usable HTTPS port. Pick 443, or a free port such as 8443."

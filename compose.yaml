@@ -50,6 +50,7 @@ services:
     environment:
       ATLAS_HTTPS_HOST: ${ATLAS_HTTPS_HOST:-}
       ATLAS_HTTPS_PORT: ${ATLAS_HTTPS_PORT:-443}
+      ATLAS_HTTPS_CERT: ${ATLAS_HTTPS_CERT:-letsencrypt}
       ATLAS_ALLOWED_IPS: ${ATLAS_ALLOWED_IPS:-0.0.0.0/0 ::/0}
       ATLAS_DNS_API_TOKEN: ${ATLAS_DNS_API_TOKEN:-}
     depends_on:

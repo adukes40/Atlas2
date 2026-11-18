@@ -61,6 +61,15 @@ If a firewall between users and the server blocks port 443, add
 DNS, so it does not need 443, and the address becomes
 `https://atlas.example.org:8443`.
 
+If you cannot use a name whose public DNS you control (for example, your web
+proxy only sends internal names under your network's own domain direct), use
+Caddy's own certificate authority instead:
+`sudo ./install.sh --https atlas.internal.example.org --https-cert internal`.
+No API key is needed. The installer saves the root certificate as
+`atlas-root-ca.crt`. Push it once to your managed devices (a GPO for Windows,
+Google Admin for Chromebooks) and they show the padlock with no warning.
+Devices you do not manage will see a warning.
+
 To let only your own networks in, set `ATLAS_ALLOWED_IPS` in `.env` to space
 separated addresses or ranges (for example `10.20.0.0/16 10.30.0.0/16`) and
 run the installer again. Everyone else gets a 403 page.
