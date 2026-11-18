@@ -201,6 +201,8 @@ dl { margin: 0; }
 .signin .card { width: 100%; max-width: 400px; }
 .signin .brand-app { color: var(--ink2); margin: 0 0 4px; }
 .signin h1 { margin-bottom: 24px; }
+.signin-sso { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.signin-or { margin: 16px 0; text-align: center; font-size: 13px; color: var(--ink2); }
 
 /* Phone: keep the rail short so the lookup box is on the first screen. */
 /* Switch page: the faceplate, odd ports on top like the hardware */

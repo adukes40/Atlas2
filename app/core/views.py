@@ -15,6 +15,7 @@ from .context import MODE_COOKIE, MODES
 from .forms import OrganizationForm, UserForm
 from reports.models import SyncRun
 from reports.views import platform_times as reports_platforms
+from sso.models import ClassLinkConfig
 
 from .models import Organization
 
@@ -44,7 +45,11 @@ def settings_page(request):
         messages.success(request, "Settings saved.")
         return redirect("settings")
     users = get_user_model().objects.filter(is_active=True).count()
-    return render(request, "core/settings.html", {"section": "settings", "form": form, "active_users": users})
+    classlink_on = ClassLinkConfig.load().ready
+    return render(
+        request, "core/settings.html",
+        {"section": "settings", "form": form, "active_users": users, "classlink_on": classlink_on},
+    )
 
 
 @login_required

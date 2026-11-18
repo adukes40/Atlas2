@@ -1,0 +1,36 @@
+{% extends "core/base.html" %}
+{% block title %}ClassLink sign-in{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / Sign-in</p>
+  <h1>ClassLink sign-in</h1>
+</div>
+<div class="grid">
+  <section class="card">
+    <div class="card-head"><h2>ClassLink</h2><span class="chip {% if config.ready %}ok{% endif %}">{% if config.ready %}On{% else %}Off{% endif %}</span></div>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+      <div class="field">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+        {% if field.help_text %}<p class="hint">{{ field.help_text }}</p>{% endif %}
+      </div>
+      {% endfor %}
+      <button class="btn" type="submit">Save</button>
+    </form>
+    <p class="hint">Password sign-in always stays on, so an administrator with a password can get in if ClassLink is down.</p>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Copy into ClassLink</h2><a href="{% url 'saml-metadata' %}" download="atlas-metadata.xml">Download metadata</a></div>
+    <dl>
+      <div class="kv"><dt>Entity ID</dt><dd class="mono">{{ values.entity_id }}</dd></div>
+      <div class="kv"><dt>ACS URL</dt><dd class="mono">{{ values.acs_url }}</dd></div>
+      <div class="kv"><dt>Sign-in start URL</dt><dd class="mono">{{ launch_url }}</dd></div>
+    </dl>
+    <p class="hint">Map these attributes in ClassLink: <span class="mono">email</span> to Email, <span class="mono">firstName</span> to Given Name, <span class="mono">lastName</span> to Family Name. ClassLink never needs to reach Atlas directly; sign-ins pass through the browser.</p>
+  </section>
+</div>
+{% endblock %}
