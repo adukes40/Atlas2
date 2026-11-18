@@ -1,11 +1,30 @@
-# Serves Atlas over HTTPS at ATLAS_HTTPS_HOST with a Let's Encrypt
-# certificate, proven through IONOS DNS (the DNS-01 challenge). Caddy renews
-# it by itself. Plain http:// is redirected to https://.
+# Serves Atlas over HTTPS at ATLAS_HTTPS_HOST. Where the certificate comes
+# from is ATLAS_HTTPS_CERT:
 #
-# Using another DNS host: add its plugin in caddy/Dockerfile
-# (https://github.com/caddy-dns) and change the "dns" line below.
+#   letsencrypt  A free, publicly trusted Let's Encrypt certificate, proven
+#                through IONOS DNS (the DNS-01 challenge). Needs control of
+#                the domain's public DNS. Using another DNS host: add its
+#                plugin in caddy/Dockerfile (https://github.com/caddy-dns)
+#                and change the "dns" line below. For a name in a domain
+#                someone else hosts, see --https-dns-alias in install.sh.
+#   internal     Caddy runs its own certificate authority. For names whose
+#                public DNS you do not control. Push its root certificate
+#                (install.sh saves it as atlas-root-ca.crt) to your devices
+#                once, and they trust Atlas from then on.
+#
+# Either way Caddy renews the certificate by itself.
 
-{$ATLAS_HTTPS_HOST} {
+{
+	# The root goes to devices through GPO or Google Admin, not this container.
+	skip_install_trust
+	pki {
+		ca local {
+			name "Atlas Local Authority"
+		}
+	}
+}
+
+(cert-letsencrypt) {
 	tls {
 		dns ionos {env.ATLAS_DNS_API_TOKEN}
 		# Many school networks only allow DNS through their own resolvers, so
@@ -13,6 +32,27 @@
 		# wait two minutes and let Let's Encrypt check.
 		propagation_delay 2m
 		propagation_timeout -1
+		# Where the proof record goes. Normally _acme-challenge.<name>; with
+		# --https-dns-alias, a name in a domain IONOS holds, which the name's
+		# own domain points to with a one-time CNAME.
+		dns_challenge_override_domain {$ATLAS_DNS_CHALLENGE_ALIAS}
 	}
+}
+
+(cert-internal) {
+	tls internal
+}
+
+{$ATLAS_HTTPS_HOST}:{$ATLAS_HTTPS_PORT:443} {
+	import cert-{$ATLAS_HTTPS_CERT:letsencrypt}
+
+	# Only these addresses may use Atlas (ATLAS_ALLOWED_IPS, space separated).
+	# The health check stays open so install.sh can see Atlas is up.
+	@outside {
+		not remote_ip {$ATLAS_ALLOWED_IPS:0.0.0.0/0 ::/0}
+		not path /healthz/
+	}
+	respond @outside "Atlas is only available on the district network." 403
+
 	reverse_proxy web:8000
 }

@@ -56,6 +56,36 @@ key once, starts Caddy on ports 80 and 443, and waits for the certificate.
 Caddy renews it by itself. After that, Atlas's own port answers only on the
 server itself, and `sudo ./install.sh --https off` goes back to plain HTTP.
 
+If a firewall between users and the server blocks port 443, add
+`--https-port 8443` (or any port it allows). The certificate is proven through
+DNS, so it does not need 443, and the address becomes
+`https://atlas.example.org:8443`.
+
+If the name has to be in a domain someone else hosts, but you can add one
+public record there, delegate the proof to your IONOS domain. Add once, in
+that domain:
+
+```
+_acme-challenge.atlas.other.example.org  CNAME  _acme-challenge.atlas.example.org
+```
+
+then run `sudo ./install.sh --https atlas.other.example.org --https-dns-alias
+_acme-challenge.atlas.example.org`. Caddy writes the proof into IONOS and Let's
+Encrypt follows the CNAME to it, so the certificate is still publicly trusted.
+
+If you cannot use a name whose public DNS you control (for example, your web
+proxy only sends internal names under your network's own domain direct), use
+Caddy's own certificate authority instead:
+`sudo ./install.sh --https atlas.internal.example.org --https-cert internal`.
+No API key is needed. The installer saves the root certificate as
+`atlas-root-ca.crt`. Push it once to your managed devices (a GPO for Windows,
+Google Admin for Chromebooks) and they show the padlock with no warning.
+Devices you do not manage will see a warning.
+
+To let only your own networks in, set `ATLAS_ALLOWED_IPS` in `.env` to space
+separated addresses or ranges (for example `10.20.0.0/16 10.30.0.0/16`) and
+run the installer again. Everyone else gets a 403 page.
+
 ## Connect Incident IQ
 
 Sign in as an administrator, open Settings, choose Incident IQ, and enter your

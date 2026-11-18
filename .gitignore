@@ -15,3 +15,4 @@ app/staticfiles/
 # Working notes kept outside the repo
 CLAUDE.md
 HANDOFF.md
+atlas-root-ca.crt
