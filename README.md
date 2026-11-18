@@ -61,6 +61,18 @@ If a firewall between users and the server blocks port 443, add
 DNS, so it does not need 443, and the address becomes
 `https://atlas.example.org:8443`.
 
+If the name has to be in a domain someone else hosts, but you can add one
+public record there, delegate the proof to your IONOS domain. Add once, in
+that domain:
+
+```
+_acme-challenge.atlas.other.example.org  CNAME  _acme-challenge.atlas.example.org
+```
+
+then run `sudo ./install.sh --https atlas.other.example.org --https-dns-alias
+_acme-challenge.atlas.example.org`. Caddy writes the proof into IONOS and Let's
+Encrypt follows the CNAME to it, so the certificate is still publicly trusted.
+
 If you cannot use a name whose public DNS you control (for example, your web
 proxy only sends internal names under your network's own domain direct), use
 Caddy's own certificate authority instead:

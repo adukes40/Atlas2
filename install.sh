@@ -26,6 +26,7 @@ CHECK_ONLY=0
 HTTPS_FLAG=""   # --https NAME, or "off"
 HTTPS_PORT_FLAG=""
 HTTPS_CERT_FLAG=""
+HTTPS_ALIAS_FLAG=""
 HTTPS_CERT=letsencrypt
 HTTPS_PORT=443
 HTTPS_URL=""
@@ -63,6 +64,12 @@ Usage: sudo ./install.sh [options]
                 Encrypt, for a name whose public DNS you do not control.
                 Push the saved atlas-root-ca.crt to your devices once.
                 "--https-cert letsencrypt" goes back.
+  --https-dns-alias NAME
+                Let's Encrypt for a name in a domain whose DNS you can add
+                one record to but IONOS does not hold. Add once, in that
+                domain: _acme-challenge.<https name> CNAME NAME, where NAME
+                is in your IONOS domain, e.g. _acme-challenge.atlas.example.org.
+                Remembered in .env; "--https-dns-alias off" clears it.
   --https-port N  Serve HTTPS on port N instead of 443, for networks whose
                 firewall blocks 443. The address becomes https://NAME:N.
   --check       Only check that this server is ready. Changes nothing.
@@ -181,6 +188,16 @@ prepare_env() {
   if [[ -n "$HTTPS_HOST" ]]; then
     env_set ATLAS_HTTPS_HOST "$HTTPS_HOST"
     env_set ATLAS_HTTPS_CERT "$HTTPS_CERT"
+    # Empty means the usual _acme-challenge.<name> (compose.yaml fills it in).
+    case "$HTTPS_ALIAS_FLAG" in
+      "") ;;
+      off) env_set ATLAS_DNS_CHALLENGE_ALIAS "" ;;
+      *) env_set ATLAS_DNS_CHALLENGE_ALIAS "$HTTPS_ALIAS_FLAG" ;;
+    esac
+    local alias; alias="$(env_get ATLAS_DNS_CHALLENGE_ALIAS)"
+    if [[ "$HTTPS_CERT" == letsencrypt && -n "$alias" ]]; then
+      ok "Proof record goes to $alias (needs _acme-challenge.$HTTPS_HOST CNAME $alias)"
+    fi
     if [[ "$HTTPS_CERT" == internal ]]; then
       ok "Certificate from Caddy's own certificate authority"
     elif [[ -z "$(env_get ATLAS_DNS_API_TOKEN)" ]]; then
@@ -531,6 +548,8 @@ main() {
       --https=*) HTTPS_FLAG="${1#--https=}"; shift ;;
       --https-cert) [[ $# -ge 2 ]] || die "--https-cert needs 'internal' or 'letsencrypt' after it."; HTTPS_CERT_FLAG="$2"; shift 2 ;;
       --https-cert=*) HTTPS_CERT_FLAG="${1#--https-cert=}"; shift ;;
+      --https-dns-alias) [[ $# -ge 2 ]] || die "--https-dns-alias needs a name after it."; HTTPS_ALIAS_FLAG="$2"; shift 2 ;;
+      --https-dns-alias=*) HTTPS_ALIAS_FLAG="${1#--https-dns-alias=}"; shift ;;
       --https-port) [[ $# -ge 2 ]] || die "--https-port needs a port number after it."; HTTPS_PORT_FLAG="$2"; shift 2 ;;
       --https-port=*) HTTPS_PORT_FLAG="${1#--https-port=}"; shift ;;
       --check)  CHECK_ONLY=1; shift ;;
@@ -555,6 +574,8 @@ main() {
     HTTPS_CERT="${HTTPS_CERT_FLAG:-$(env_get ATLAS_HTTPS_CERT)}"; HTTPS_CERT="${HTTPS_CERT:-letsencrypt}"
     [[ "$HTTPS_CERT" == letsencrypt || "$HTTPS_CERT" == internal ]] \
       || die "--https-cert is 'letsencrypt' or 'internal', not '$HTTPS_CERT'."
+    [[ -z "$HTTPS_ALIAS_FLAG" || "$HTTPS_ALIAS_FLAG" == off || "$HTTPS_ALIAS_FLAG" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]] \
+      || die "'$HTTPS_ALIAS_FLAG' is not a DNS name, for example _acme-challenge.atlas.example.org."
     HTTPS_PORT="${HTTPS_PORT_FLAG:-$(env_get ATLAS_HTTPS_PORT)}"; HTTPS_PORT="${HTTPS_PORT:-443}"
     if ! [[ "$HTTPS_PORT" =~ ^[0-9]{1,5}$ ]] || (( HTTPS_PORT < 1 || HTTPS_PORT > 65535 || HTTPS_PORT == 80 )); then
       die "'$HTTPS_PORT' is not a usable HTTPS port. Pick 443, or a free port such as 8443."
