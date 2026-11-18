@@ -61,6 +61,10 @@ If a firewall between users and the server blocks port 443, add
 DNS, so it does not need 443, and the address becomes
 `https://atlas.example.org:8443`.
 
+To let only your own networks in, set `ATLAS_ALLOWED_IPS` in `.env` to space
+separated addresses or ranges (for example `10.20.0.0/16 10.30.0.0/16`) and
+run the installer again. Everyone else gets a 403 page.
+
 ## Connect Incident IQ
 
 Sign in as an administrator, open Settings, choose Incident IQ, and enter your

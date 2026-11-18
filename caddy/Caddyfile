@@ -14,5 +14,13 @@
 		propagation_delay 2m
 		propagation_timeout -1
 	}
+	# Only these addresses may use Atlas (ATLAS_ALLOWED_IPS, space separated).
+	# The health check stays open so install.sh can see Atlas is up.
+	@outside {
+		not remote_ip {$ATLAS_ALLOWED_IPS:0.0.0.0/0 ::/0}
+		not path /healthz/
+	}
+	respond @outside "Atlas is only available on the district network." 403
+
 	reverse_proxy web:8000
 }

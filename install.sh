@@ -184,6 +184,12 @@ prepare_env() {
       ok "IONOS API key already set; not changed"
     fi
     env_set ATLAS_HTTPS_PORT "$HTTPS_PORT"
+    local range
+    for range in $(env_get ATLAS_ALLOWED_IPS); do
+      [[ "$range" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$ ]] \
+        || die "ATLAS_ALLOWED_IPS has '$range', which is not an address or range like 10.20.0.0/16. Separate them with spaces."
+    done
+    if [[ -n "$(env_get ATLAS_ALLOWED_IPS)" ]]; then ok "Only these may open Atlas: $(env_get ATLAS_ALLOWED_IPS)"; fi
     local own
     own="$(env_get ATLAS_PORT)"
     if [[ "$own" == 80 || "$own" == "$HTTPS_PORT" ]]; then
