@@ -320,6 +320,15 @@ def link_gear():
     SwitchPort.objects.bulk_update(named, ["neighbor", "neighbor_kind", "neighbor_mac"], batch_size=1000)
 
 
+def _moment(value):
+    """An Incident IQ date or date-time as an aware datetime, or None."""
+    try:
+        when = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=dt_timezone.utc)
+
+
 def _text(value):
     return str(value).strip() if value not in (None, "") else ""
 
@@ -331,7 +340,8 @@ def _cut(value, field):
 IIQ_FIELDS = ["serial", "in_iiq", "iiq_asset_id", "asset_tag", "model", "category", "iiq_status", "iiq_location", "owner_id"]
 GOOGLE_FIELDS = ["in_google", "google_status", "org_unit", "last_sync", "recent_user", "google_model", "os_version",
                  "updates_until", "google_asset_id", "macs", "wan_ip"]
-PERSON_FIELDS = ["user_id", "name", "email", "school_id", "role", "grade", "school", "active", "fee_balance", "fee_past_due"]
+PERSON_FIELDS = ["user_id", "name", "email", "school_id", "role", "grade", "school", "active", "fee_balance", "fee_past_due",
+                 "homeroom", "username", "created", "google_ou", "google_last_login"]
 
 
 def rebuild(google, assets, people, google_on=True):
@@ -372,6 +382,8 @@ def _iiq(assets, people):
                 school_id=person.school_id[:64], role=person.role[:100], grade=person.grade[:20],
                 school=person.location[:200], active=active,
                 fee_balance=fees.balance if fees else None, fee_past_due=fees.past_due if fees else None,
+                homeroom=person.homeroom[:100], username=person.username[:200], created=_moment(person.created),
+                google_ou=person.google_ou[:300], google_last_login=_moment(person.google_last_login),
             )
 
     devices = {}

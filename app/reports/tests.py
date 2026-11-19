@@ -180,6 +180,23 @@ class SyncTests(TestCase):
         self.assertTrue(device.signed_in_by_other)
         self.assertEqual(catalog.count(BY_SLUG["disabled-but-assigned"]), 1)
 
+    def test_people_get_their_google_sign_in_homeroom_and_start_date(self):
+        old_login = (datetime.now(dt_timezone.utc) - timedelta(days=40)).date().isoformat()
+        google = json.dumps([{"LastLoginDate": old_login, "OrgUnitPath": "/Students/North", "OrgUnitPathNormalized": "/Students/North"}])
+        new = (datetime.now(dt_timezone.utc) - timedelta(days=3)).isoformat()
+        routes = {**IIQ_ROUTES, "/users?$p=0&$s=500": page(
+            person("u-1", "jsample@students.example", Homeroom="B214", Username="jsample",
+                   CustomFieldValues=[{"Value": FEES}, {"Value": google}]),
+            person("u-3", "nobook@students.example", CreatedDate=new),
+        )}
+        self.assertEqual(sync(routes).state, SyncRun.DONE)
+        jordan = Person.objects.get(user_id="u-1")
+        self.assertEqual((jordan.homeroom, jordan.username, jordan.google_ou), ("B214", "jsample", "/Students/North"))
+        self.assertEqual(jordan.google_last_login.date().isoformat(), old_login)
+        self.assertEqual(jordan.fee_balance, Decimal("30"))  # the Google field is not mistaken for fees
+        self.assertEqual(catalog.count(BY_SLUG["not-signing-in"]), 1)
+        self.assertEqual(catalog.count(BY_SLUG["new-no-device"]), 1)
+
     def test_a_google_failure_keeps_yesterdays_copy(self):
         sync()
         run = sync(google=FakeResponse(status=403))

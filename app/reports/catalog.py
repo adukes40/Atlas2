@@ -88,6 +88,11 @@ PEOPLE_FIELDS = _fields(
     ("chromebooks", "Chromebooks assigned", "number", ATLAS),
     ("devices", "Assets assigned", "number", IIQ),
     ("device_tags", "Asset tags", "text", IIQ),
+    ("homeroom", "Homeroom", "text", IIQ),
+    ("username", "Username", "text", IIQ),
+    ("created", "Added to Incident IQ", "when", IIQ),
+    ("google_ou", "Google OU", "text", GOOGLE),
+    ("google_last_login", "Last Google sign-in", "when", GOOGLE),
 )
 
 LOOKUP_FIELDS = _fields(
@@ -371,6 +376,19 @@ REPORTS = [
         "Active students with no Chromebook assigned in Incident IQ.",
         "people", ("role.is.Student", "active.yes.", "chromebooks.eq.0"),
         ("name", "email", "school_id", "grade", "school", "devices"), "school",
+    ),
+    Report(
+        "not-signing-in", "Students not signing in to Google", G["who"],
+        "Active students with a Chromebook who haven't signed in to Google in 30 days or more.",
+        "people", ("role.is.Student", "active.yes.", "chromebooks.gt.0", "google_last_login.notwithin.30"),
+        ("name", "email", "grade", "school", "homeroom", "google_last_login", "google_ou", "device_tags"), "google_last_login",
+        needs=("Google",),
+    ),
+    Report(
+        "new-no-device", "New students with no device", G["who"],
+        "Students added to Incident IQ in the last 14 days who have nothing assigned yet.",
+        "people", ("role.is.Student", "active.yes.", "created.within.14", "devices.eq.0"),
+        ("name", "email", "school_id", "grade", "school", "homeroom", "created"), "-created",
     ),
     Report(
         "departed-holding", "Departed, still holding devices", G["who"],

@@ -18,6 +18,10 @@ class Person:
     homeroom: str = ""
     location_id: str = ""
     location: str = ""  # filled in by the lookup service
+    username: str = ""
+    created: str = ""  # when Incident IQ added them, ISO
+    google_ou: str = ""
+    google_last_login: str = ""  # YYYY-MM-DD, from Incident IQ's Google sync
 
 
 @dataclass
@@ -221,9 +225,32 @@ def normalize_user(raw):
         grade=_text(raw.get("Grade")),
         homeroom=_text(raw.get("Homeroom")),
         location=_text(raw.get("LocationName")) or _text(location.get("Name")),
+        username=_text(raw.get("Username")),
+        created=_text(raw.get("CreatedDate")),
     )
+    google = _custom_row(raw, "OrgUnitPath") or {}
+    person.google_ou = _text(google.get("OrgUnitPath"))
+    person.google_last_login = _text(google.get("LastLoginDate"))[:10]
     active = raw.get("IsActive", True) is not False and not raw.get("IsDeleted")
     return person, _fees(raw), active
+
+
+def _custom_row(raw, marker):
+    """The first row of the JSON-list custom field whose text contains `marker`,
+    or None. Incident IQ's add-on apps keep their data this way; finding the
+    field by its shape means no district-specific field ID is needed."""
+    for custom in raw.get("CustomFieldValues") or []:
+        value = custom.get("Value") if isinstance(custom, dict) else None
+        if not isinstance(value, str) or marker not in value:
+            continue
+        try:
+            rows = json.loads(value)
+        except ValueError:
+            continue
+        row = rows[0] if isinstance(rows, list) and rows else rows
+        if isinstance(row, dict):
+            return row
+    return None
 
 
 def google_device(raw):
@@ -231,28 +258,19 @@ def google_device(raw):
     shape Google's own API uses, or None. Incident IQ stores it as a custom
     field holding a JSON list; it is found by its shape, so no field ID is needed.
     It has no ChromeOS version, MAC addresses or hardware details."""
-    for custom in raw.get("CustomFieldValues") or []:
-        value = custom.get("Value") if isinstance(custom, dict) else None
-        if not isinstance(value, str) or "OrgUnitPath" not in value:
-            continue
-        try:
-            rows = json.loads(value)
-        except ValueError:
-            continue
-        row = (rows[0] if isinstance(rows, list) and rows else rows) if rows else None
-        if not isinstance(row, dict):
-            continue
-        email = _text(row.get("RecentUserEmail"))
-        return {
-            "serialNumber": _text(raw.get("SerialNumber")),
-            "model": _text((raw.get("Model") or {}).get("Name")),
-            "status": _text(row.get("ChromebookStatus")),
-            "orgUnitPath": _text(row.get("OrgUnitPath")),
-            "lastSync": _text(row.get("LastSyncDate")),
-            "autoUpdateThrough": _text(row.get("ChromebookAutoUpdateExpiration")),
-            "recentUsers": [{"email": email}] if email else [],
-        }
-    return None
+    row = _custom_row(raw, "OrgUnitPath")
+    if not row:
+        return None
+    email = _text(row.get("RecentUserEmail"))
+    return {
+        "serialNumber": _text(raw.get("SerialNumber")),
+        "model": _text((raw.get("Model") or {}).get("Name")),
+        "status": _text(row.get("ChromebookStatus")),
+        "orgUnitPath": _text(row.get("OrgUnitPath")),
+        "lastSync": _text(row.get("LastSyncDate")),
+        "autoUpdateThrough": _text(row.get("ChromebookAutoUpdateExpiration")),
+        "recentUsers": [{"email": email}] if email else [],
+    }
 
 
 def google_device_from_app(raw):

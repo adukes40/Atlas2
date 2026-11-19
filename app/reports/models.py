@@ -49,6 +49,11 @@ class Person(models.Model):
     chromebooks = models.IntegerField(default=0)  # assigned devices Google also has; by IIQ model or category without Google
     devices = models.IntegerField(default=0)  # every assigned asset
     device_tags = models.CharField(max_length=300, blank=True)
+    homeroom = models.CharField(max_length=100, blank=True)
+    username = models.CharField(max_length=200, blank=True)
+    created = models.DateTimeField(null=True, blank=True)  # when Incident IQ added them
+    google_ou = models.CharField(max_length=300, blank=True)
+    google_last_login = models.DateTimeField(null=True, blank=True)  # from Incident IQ's Google sync
 
 
 class Device(models.Model):
