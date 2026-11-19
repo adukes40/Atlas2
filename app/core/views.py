@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -29,6 +29,14 @@ def _database_ok():
         return False
 
 
+def uploaded_theme(request):
+    """The theme file uploaded in Settings. Not behind sign-in: the sign-in page wears it too."""
+    response = HttpResponse(Organization.load().theme_upload, content_type="text/css; charset=utf-8")
+    response["Cache-Control"] = "public, max-age=31536000"  # the page links it with ?v=<hash of the file>
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 def healthz(request):
     ok = _database_ok()
     return JsonResponse({"ok": ok}, status=200 if ok else 503)
@@ -39,7 +47,7 @@ def settings_page(request):
     if not request.user.is_superuser:
         raise PermissionDenied
     org = Organization.load()
-    form = OrganizationForm(request.POST or None, instance=org)
+    form = OrganizationForm(request.POST or None, request.FILES or None, instance=org)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Settings saved.")

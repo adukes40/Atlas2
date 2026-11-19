@@ -12,6 +12,8 @@ class Organization(models.Model):
     theme = models.CharField(max_length=40, choices=theme_choices, default=DEFAULT_THEME)
     # One per line: a full address, the start of one (10.20.) or a range (203.0.113.0/24).
     wan_ips = models.TextField(blank=True)
+    # A theme file uploaded in Settings: CSS that sets the same variables as themes/slate.css.
+    theme_upload = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
         self.pk = 1

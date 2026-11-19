@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -87,6 +88,34 @@ class ThemeTests(TestCase):
         self.assertNotContains(page, "core/themes/graphite.css")
         self.assertContains(page, "Example District")
         self.assertEqual(Organization.objects.count(), 1)
+
+    def test_an_uploaded_theme_file_is_used_and_served(self):
+        css = b"/* District Red: red sidebar */ :root { --bg: #fff; }"
+        upload = SimpleUploadedFile("district.css", css, content_type="text/css")
+        response = self.client.post(reverse("settings"), {"name": "X", "theme": "graphite", "theme_file": upload})
+        self.assertRedirects(response, reverse("settings"))
+        org = Organization.load()
+        self.assertEqual(org.theme, "uploaded")
+        page = self.client.get(reverse("device360"))
+        self.assertContains(page, reverse("uploaded-theme") + "?v=")
+        self.assertNotContains(page, "core/themes/graphite.css")
+        self.client.logout()
+        served = self.client.get(reverse("uploaded-theme"))
+        self.assertEqual(served["Content-Type"], "text/css; charset=utf-8")
+        self.assertEqual(served.content, css)
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("settings")), "Uploaded now: District Red.")
+
+    def test_a_file_that_is_not_a_theme_is_refused(self):
+        for name, body in [("page.css", b"<script>alert(1)</script> --x"), ("plain.css", b"body { color: red }"), ("bin.css", b"\xff\xfe--")]:
+            upload = SimpleUploadedFile(name, body, content_type="text/css")
+            response = self.client.post(reverse("settings"), {"name": "X", "theme": "graphite", "theme_file": upload})
+            self.assertEqual(response.status_code, 200, name)
+        self.assertEqual(Organization.load().theme_upload, "")
+
+    def test_choosing_uploaded_with_nothing_uploaded_is_refused(self):
+        response = self.client.post(reverse("settings"), {"name": "X", "theme": "uploaded"})
+        self.assertContains(response, "Upload a theme file first.")
 
     def test_unknown_theme_is_rejected(self):
         response = self.client.post(reverse("settings"), {"name": "X", "theme": "nope"})
