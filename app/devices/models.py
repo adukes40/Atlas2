@@ -5,7 +5,9 @@ from django.db import models
 class LookupLog(models.Model):
     """Who looked up what, and when. Also where "Recent lookups" comes from."""
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lookups")
+    # Kept when the user is deleted: `username` still says who it was.
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="lookups")
+    username = models.CharField(max_length=150, blank=True)
     query = models.CharField(max_length=100)
     found = models.BooleanField(default=False)
     key = models.CharField(max_length=100, blank=True)  # asset tag or serial to look up again
@@ -17,7 +19,7 @@ class LookupLog(models.Model):
         indexes = [models.Index(fields=["user", "-created_at"])]
 
     def __str__(self):
-        return f"{self.query} by {self.user}"
+        return f"{self.query} by {self.username}"
 
 
 def recent_lookups(user, limit=5):

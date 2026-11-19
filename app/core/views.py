@@ -81,6 +81,23 @@ def user_edit(request, pk=None):
 
 
 @login_required
+def user_delete(request, pk):
+    """Delete a person. Their lookup history stays, under their username."""
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    person = get_object_or_404(get_user_model(), pk=pk)
+    if person.pk == request.user.pk:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect("user-edit", pk=pk)
+    if request.method == "POST":
+        name = person.get_username()
+        person.delete()
+        messages.success(request, f"Deleted {name}. Their lookup history is kept.")
+        return redirect("users")
+    return render(request, "core/user_delete.html", {"section": "settings", "person": person})
+
+
+@login_required
 def system(request):
     return render(
         request,

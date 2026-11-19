@@ -92,7 +92,7 @@ PEOPLE_FIELDS = _fields(
 
 LOOKUP_FIELDS = _fields(
     ("created_at", "When", "when", ATLAS),
-    ("user__username", "Who", "text", ATLAS),
+    ("username", "Who", "text", ATLAS),
     ("query", "Searched for", "text", ATLAS),
     ("found", "Found", "bool", ATLAS),
     ("label", "Turned out to be", "text", ATLAS),
@@ -165,7 +165,7 @@ PSK_FIELDS = _fields(
 BASES = {
     "devices": (DEVICE_FIELDS, lambda: Device.objects.select_related("owner"), ("device", "devices")),
     "people": (PEOPLE_FIELDS, lambda: Person.objects.all(), ("person", "people")),
-    "lookups": (LOOKUP_FIELDS, lambda: LookupLog.objects.select_related("user"), ("lookup", "lookups")),
+    "lookups": (LOOKUP_FIELDS, lambda: LookupLog.objects.all(), ("lookup", "lookups")),
     "gear": (GEAR_FIELDS, lambda: NetDevice.objects.all(), ("device", "devices")),
     "ports": (PORT_FIELDS, lambda: SwitchPort.objects.all(), ("port", "ports")),
     "wlans": (WLAN_FIELDS, lambda: Wlan.objects.all(), ("network", "networks")),
@@ -474,7 +474,7 @@ REPORTS = [
         "lookups", "Lookup activity", G["atlas"],
         "Who looked up which devices in Atlas in the last 30 days. This one is live.",
         "lookups", ("created_at.within.30",),
-        ("created_at", "user__username", "query", "found", "label"), "-created_at",
+        ("created_at", "username", "query", "found", "label"), "-created_at",
     ),
 ]
 BY_SLUG = {r.slug: r for r in REPORTS}
