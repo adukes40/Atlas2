@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -13,8 +13,8 @@ from django.views.decorators.http import require_POST
 
 from .context import MODE_COOKIE, MODES
 from .forms import OrganizationForm, UserForm
-from reports.models import SyncRun
-from reports.views import platform_times as reports_platforms
+from reports.models import SyncRun, SyncSchedule
+from reports.views import platform_times as reports_platforms, sync_status
 from sso.models import ClassLinkConfig
 
 from .models import Organization
@@ -29,6 +29,14 @@ def _database_ok():
         return False
 
 
+def uploaded_theme(request):
+    """The theme file uploaded in Settings. Not behind sign-in: the sign-in page wears it too."""
+    response = HttpResponse(Organization.load().theme_upload, content_type="text/css; charset=utf-8")
+    response["Cache-Control"] = "public, max-age=31536000"  # the page links it with ?v=<hash of the file>
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 def healthz(request):
     ok = _database_ok()
     return JsonResponse({"ok": ok}, status=200 if ok else 503)
@@ -39,7 +47,7 @@ def settings_page(request):
     if not request.user.is_superuser:
         raise PermissionDenied
     org = Organization.load()
-    form = OrganizationForm(request.POST or None, instance=org)
+    form = OrganizationForm(request.POST or None, request.FILES or None, instance=org)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Settings saved.")
@@ -49,7 +57,8 @@ def settings_page(request):
     classlink_on = ClassLinkConfig.load().ready
     return render(
         request, "core/settings.html",
-        {"section": "settings", "form": form, "active_users": users, "waiting_users": waiting, "classlink_on": classlink_on},
+        {"section": "settings", "form": form, "active_users": users, "waiting_users": waiting, "classlink_on": classlink_on,
+         "schedules": SyncSchedule.objects.all(), "sync_tz": settings.ATLAS_TIME_ZONE},
     )
 
 
@@ -111,6 +120,7 @@ def system(request):
             "sync_runs": SyncRun.objects.all()[:5],
             "sync_tz": settings.ATLAS_TIME_ZONE,
             "platforms": reports_platforms(),
+            "sync": sync_status(),
         },
     )
 

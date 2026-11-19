@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Atlas{% endblock %} · {{ org.name }}</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="{% static theme_css %}">
+<link rel="stylesheet" href="{{ theme_url }}">
 <link rel="stylesheet" href="{% static 'core/atlas.css' %}">
 <script src="{% static 'core/atlas.js' %}" defer></script>
 </head>

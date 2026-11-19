@@ -15,11 +15,13 @@
 </section>
 <section class="card narrow">
   <div class="card-head"><h2>Reports sync</h2>
-    {% url 'system' as here %}{% include "reports/sync_menu.html" with next=here %}</div>
-  <p class="muted">Atlas copies Incident IQ, Google, Mist and Meraki every night for Reports, and any one of them on request. The last five runs:</p>
+    {% if not sync %}{% url 'system' as here %}{% include "reports/sync_menu.html" with next=here %}{% endif %}</div>
+  {% include "reports/sync_progress.html" with full=True %}
+  <p class="muted">Atlas copies Incident IQ, Google, Mist and Meraki for Reports on the {% if user.is_superuser %}<a href="{% url 'settings' %}">sync schedules</a>{% else %}sync schedules{% endif %}, and any one of them on request. The last five runs:</p>
   {% for run in sync_runs %}
-  <h3>{{ run.created_at|timezone:sync_tz|date:"M j, g:i A" }} · {% if run.state == 'done' %}<span class="ok">Finished</span>{% elif run.state == 'failed' %}<span class="warn">Failed</span>{% elif run.state == 'running' %}Running{% else %}Waiting to start{% endif %}{% if run.requested_by %} · asked for by {{ run.requested_by }}{% endif %}{% if run.systems %} · {{ run.platforms|join:", " }} only{% endif %}</h3>
+  <h3>{{ run.created_at|timezone:sync_tz|date:"M j, g:i A" }} · {% if run.state == 'done' %}<span class="ok">Finished</span>{% elif run.state == 'failed' %}<span class="warn">Failed</span>{% elif run.state == 'cancelled' %}<span class="warn">Cancelled</span>{% elif run.state == 'running' %}Running{% else %}Waiting to start{% endif %}{% if run.requested_by %} · asked for by {{ run.requested_by }}{% else %} · scheduled{% endif %}{% if run.systems %} · {{ run.platforms|join:", " }} only{% endif %}</h3>
   <dl>{% for name, result in run.results.items %}<div class="kv"><dt>{{ name }}</dt><dd{% if not result.ok %} class="warn"{% endif %}>{% firstof result.detail result.error %}{% if result.seconds %} <span class="muted">({{ result.seconds }}s)</span>{% endif %}</dd></div>{% endfor %}</dl>
+  {% if run.state == 'cancelled' %}<p class="muted">Stopped by {{ run.cancelled_by }}{% if run.finished_at %} at {{ run.finished_at|timezone:sync_tz|date:"g:i A" }}{% endif %}. Reports kept the data from before it.</p>{% endif %}
   {% empty %}<p style="margin-top:8px">No sync has run yet.</p>
   {% endfor %}
 </section>

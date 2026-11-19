@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+{% block title %}{% if schedule.pk %}Sync schedule{% else %}Add a sync schedule{% endif %}{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / Sync schedules</p>
+  <h1>{% if schedule.pk %}Sync schedule{% else %}Add a sync schedule{% endif %}</h1>
+</div>
+<section class="card narrow">
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="field{% if field.widget_type == 'checkbox' %} check{% endif %}">
+      {% if field.widget_type == 'checkbox' %}<label for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>
+      {% elif field.widget_type == 'checkboxselectmultiple' %}<fieldset class="tickrow"><legend>{{ field.label }}</legend>{% for box in field %}<label>{{ box.tag }} {{ box.choice_label }}</label>{% endfor %}</fieldset>
+      {% else %}{{ field.label_tag }}{{ field }}{% endif %}
+      {{ field.errors }}
+      {% if field.help_text %}<p class="hint">{{ field.help_text }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <button class="btn" type="submit">Save</button>
+    {% if schedule.pk %}<button class="btn quiet" type="submit" name="delete" value="1" formnovalidate>Delete schedule</button>{% endif %}
+  </form>
+</section>
+{% endblock %}

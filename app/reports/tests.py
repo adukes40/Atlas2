@@ -35,9 +35,10 @@ from integrations.testing import (
 
 from . import catalog
 from .catalog import BY_SLUG, DEVICE_FIELDS, REPORTS, parse_filter
-from .management.commands.run_sync_schedule import nightly_due
-from .models import DailyCount, Device, NetDevice, Person, Psk, SavedReport, Sighting, SwitchPort, SyncRun, Wlan
-from .sync import _pages, execute, request_sync, run_pending
+from .management.commands.run_sync_schedule import due_schedules, queue_due
+from .models import DailyCount, Device, NetDevice, Person, Psk, SavedReport, Sighting, SwitchPort, SyncRun, SyncSchedule, Wlan
+from . import sync as sync_module
+from .sync import _pages, cancel, execute, request_sync, run_pending
 
 User = get_user_model()
 
@@ -273,15 +274,63 @@ class SyncTests(TestCase):
             self.assertEqual(run_pending().state, SyncRun.DONE)
         self.assertIsNone(run_pending())
 
-    @override_settings(ATLAS_SYNC_HOUR=2, ATLAS_TIME_ZONE="America/New_York")
-    def test_the_nightly_run_is_due_once_after_two_am_eastern(self):
-        before = datetime(2026, 11, 13, 6, 30, tzinfo=dt_timezone.utc)  # 1:30 AM Eastern
-        after = datetime(2026, 11, 13, 7, 30, tzinfo=dt_timezone.utc)  # 2:30 AM Eastern
-        self.assertFalse(nightly_due(before))
-        self.assertTrue(nightly_due(after))
-        run = SyncRun.objects.create(requested_by="")
-        SyncRun.objects.filter(pk=run.pk).update(created_at=after)
-        self.assertFalse(nightly_due(after + timedelta(hours=3)))
+    @override_settings(ATLAS_TIME_ZONE="America/New_York")
+    def test_a_schedule_is_due_once_after_its_time_on_its_days(self):
+        SyncSchedule.objects.all().delete()
+        schedule = SyncSchedule.objects.create(at="02:00", days="01234", systems="Meraki")  # weekdays
+        before = datetime(2026, 11, 13, 6, 30, tzinfo=dt_timezone.utc)  # Friday 1:30 AM Eastern
+        after = datetime(2026, 11, 13, 7, 30, tzinfo=dt_timezone.utc)  # Friday 2:30 AM Eastern
+        self.assertEqual(due_schedules(before), [])
+        self.assertEqual(due_schedules(after), [schedule])
+        queue_due(after)
+        self.assertEqual(SyncRun.objects.get(state=SyncRun.REQUESTED).platforms, ["Meraki"])
+        self.assertEqual(due_schedules(after + timedelta(hours=3)), [])
+        self.assertEqual(due_schedules(after + timedelta(days=1)), [])  # Saturday is not one of its days
+        self.assertEqual(due_schedules(after + timedelta(days=3)), [schedule])  # Monday
+        SyncSchedule.objects.update(enabled=False)
+        self.assertEqual(due_schedules(after + timedelta(days=3)), [])
+
+    def test_the_old_nightly_hour_becomes_the_first_schedule(self):
+        schedule = SyncSchedule.objects.get()
+        self.assertEqual((schedule.at.hour, schedule.days, schedule.platforms, schedule.enabled), (2, "0123456", [], True))
+
+    def test_cancel_stops_a_waiting_sync_at_once(self):
+        run = request_sync("tech")
+        cancel(run.pk, "tech")
+        run.refresh_from_db()
+        self.assertEqual((run.state, run.cancelled_by), (SyncRun.CANCELLED, "tech"))
+        self.assertIsNone(run_pending())
+
+    def test_cancel_stops_a_running_sync_and_keeps_the_reports(self):
+        Device.objects.create(serial="KEEP1")
+        real = sync_module._google
+
+        def google_then_cancel(client):
+            found = real(client)
+            cancel(SyncRun.objects.get(state=SyncRun.RUNNING).pk, "tech")
+            return found
+
+        with mock.patch.object(sync_module, "_google", google_then_cancel):
+            run = sync()
+        self.assertEqual((run.state, run.cancelled_by), (SyncRun.CANCELLED, "tech"))
+        self.assertEqual(list(run.results), ["Google"])  # Incident IQ never started
+        self.assertEqual(list(Device.objects.values_list("serial", flat=True)), ["KEEP1"])
+        self.assertEqual(run.progress, {})
+
+    def test_progress_shows_the_running_step(self):
+        run = SyncRun.objects.create(state=SyncRun.RUNNING, results={"Google": {"ok": True, "detail": "2 Chromebooks"}},
+                                     progress={"steps": ["Google", "Incident IQ", "Atlas"], "at": 1,
+                                               "done": 500, "total": 2000, "what": "assets"})
+        self.client.force_login(User.objects.create_user("viewer"))
+        page = self.client.get(reverse("sync-progress") + "?full=1")
+        self.assertContains(page, "Syncing Incident IQ</b> · step 2 of 3 · 500 of 2,000 assets")
+        self.assertContains(page, "width:25%")
+        self.assertContains(page, "Building reports")
+        self.assertContains(self.client.get(reverse("reports")), "Cancel sync")
+        self.client.post(reverse("sync-cancel", args=[run.pk]), HTTP_REFERER="http://testserver/system/")
+        self.assertContains(self.client.get(reverse("sync-progress")), "Cancelling")
+        SyncRun.objects.filter(pk=run.pk).update(state=SyncRun.CANCELLED)
+        self.assertContains(self.client.get(reverse("sync-progress")), "data-sync-done")
 
 
 class FilterTests(TestCase):
@@ -414,7 +463,7 @@ class PageTests(TestCase):
         self.client.post(reverse("sync-now"), {"everything": "1"})
         run.refresh_from_db()
         self.assertEqual((run.platforms, SyncRun.objects.filter(state=SyncRun.REQUESTED).count()), ([], 1))
-        self.assertContains(self.client.get(reverse("reports")), "Syncing")
+        self.assertContains(self.client.get(reverse("reports")), "Sync waiting to start")
 
 
 # Network gear. Made-up names, serials and addresses.
@@ -567,3 +616,35 @@ class NetworkGearTests(TestCase):
         self.assertContains(self.client.get(switch_url, {"port": "1"}), "AXIS M3047-P")
         self.assertEqual(self.client.get(reverse("switch", args=["NOPE"])).status_code, 404)
         self.assertEqual(catalog.count(BY_SLUG["aps-offline"]), 2)
+
+
+class ScheduleSettingsTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("boss", password="x")
+        self.client.force_login(self.admin)
+
+    def test_administrators_add_change_switch_off_and_delete_schedules(self):
+        self.assertContains(self.client.get(reverse("settings")), "2:00 AM")
+        self.client.post(reverse("schedule-add"), {"enabled": "on", "at": "03:30", "day_list": ["0"], "system_list": ["Meraki"]})
+        schedule = SyncSchedule.objects.get(at="03:30")
+        self.assertEqual((schedule.days, schedule.platforms, schedule.enabled), ("0", ["Meraki"], True))
+        self.assertIsNotNone(schedule.last_queued)  # waits for its next time, not right now
+        self.client.post(reverse("schedule-edit", args=[schedule.pk]),
+                         {"enabled": "on", "at": "04:00", "day_list": ["0", "6"], "system_list": list(sync_module.PLATFORMS)})
+        schedule.refresh_from_db()
+        self.assertEqual((str(schedule.at), schedule.days, schedule.systems), ("04:00:00", "06", ""))
+        self.client.post(reverse("schedule-toggle", args=[schedule.pk]))
+        schedule.refresh_from_db()
+        self.assertFalse(schedule.enabled)
+        self.client.post(reverse("schedule-edit", args=[schedule.pk]), {"delete": "1"})
+        self.assertFalse(SyncSchedule.objects.filter(pk=schedule.pk).exists())
+
+    def test_a_schedule_needs_a_day_and_a_system(self):
+        page = self.client.post(reverse("schedule-add"), {"enabled": "on", "at": "03:30"})
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(SyncSchedule.objects.count(), 1)
+
+    def test_technicians_cannot_change_schedules(self):
+        self.client.force_login(User.objects.create_user("tech"))
+        self.assertEqual(self.client.get(reverse("schedule-add")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("schedule-toggle", args=[SyncSchedule.objects.get().pk])).status_code, 403)

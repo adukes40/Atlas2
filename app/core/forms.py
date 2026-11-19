@@ -3,10 +3,24 @@ import ipaddress
 from django import forms
 from django.contrib.auth import get_user_model, password_validation
 
+import re
+
 from .models import Organization
+from .themes import UPLOADED
+
+THEME_FILE_LIMIT = 64 * 1024
 
 
 class OrganizationForm(forms.ModelForm):
+    theme_file = forms.FileField(
+        label="Upload a theme file", required=False,
+        widget=forms.ClearableFileInput(attrs={"accept": ".css,text/css"}),
+        help_text="A .css file that sets the same color variables as Atlas's own themes, for light and dark. "
+                  "Uploading one switches Atlas to it. It replaces any file uploaded before.",
+    )
+
+    field_order = ["name", "theme", "theme_file", "wan_ips"]
+
     class Meta:
         model = Organization
         fields = ["name", "theme", "wan_ips"]
@@ -21,7 +35,39 @@ class OrganizationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("label_suffix", "")
         super().__init__(*args, **kwargs)
+        if self.instance.theme_upload:
+            self.fields["theme_file"].help_text += f" Uploaded now: {theme_name(self.instance.theme_upload)}."
 
+    def clean_theme_file(self):
+        upload = self.cleaned_data.get("theme_file")
+        if not upload:
+            return None
+        if upload.size > THEME_FILE_LIMIT:
+            raise forms.ValidationError("That file is too big for a theme. Theme files are a few KB.")
+        try:
+            css = upload.read().decode("utf-8")
+        except UnicodeDecodeError:
+            raise forms.ValidationError("That is not a text CSS file.") from None
+        if "--" not in css or "<" in css:
+            raise forms.ValidationError("That does not look like an Atlas theme file. It should set CSS variables such as --bg and --ink.")
+        return css
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("theme_file"):
+            cleaned["theme"] = UPLOADED
+        elif cleaned.get("theme") == UPLOADED and not self.instance.theme_upload:
+            self.add_error("theme", "Upload a theme file first.")
+        return cleaned
+
+    def save(self, commit=True):
+        org = super().save(commit=False)
+        if self.cleaned_data.get("theme_file"):
+            org.theme_upload = self.cleaned_data["theme_file"]
+            org.theme = UPLOADED
+        if commit:
+            org.save()
+        return org
 
     def clean_wan_ips(self):
         lines = [line.strip() for line in self.cleaned_data["wan_ips"].splitlines() if line.strip()]
@@ -34,6 +80,12 @@ class OrganizationForm(forms.ModelForm):
             elif not line.strip(".:") or any(c not in "0123456789abcdefABCDEF.:" for c in line):
                 raise forms.ValidationError(f"“{line}” is not an address or the start of one.")
         return "\n".join(lines)
+
+
+def theme_name(css):
+    """The name in a theme file's opening comment, /* Name: ... */."""
+    found = re.match(r"\s*/\*\s*([^:*\n]{1,60}):", css)
+    return found.group(1).strip() if found else "a theme file"
 
 
 class UserForm(forms.ModelForm):

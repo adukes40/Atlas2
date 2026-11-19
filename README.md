@@ -154,6 +154,8 @@ Graphite is the default look and opens in dark mode. Slate is the
 other built-in theme, chosen in Settings → Organization. Anyone can
 switch between Light, Dark and Auto for themselves. A theme is one CSS file in
 `app/core/static/core/themes/` plus an entry in `app/core/themes.py`.
+An administrator can also upload a district's own theme file in
+Settings → Organization; it is kept in the database, not in the repo.
 
 ## Not done yet
 

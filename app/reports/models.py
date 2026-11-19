@@ -10,7 +10,7 @@ from django.db import models
 
 
 class SyncRun(models.Model):
-    REQUESTED, RUNNING, DONE, FAILED = "requested", "running", "done", "failed"
+    REQUESTED, RUNNING, DONE, FAILED, CANCELLED = "requested", "running", "done", "failed", "cancelled"
 
     state = models.CharField(max_length=10, default=REQUESTED)
     requested_by = models.CharField(max_length=150, blank=True)  # blank: the nightly schedule
@@ -20,6 +20,9 @@ class SyncRun(models.Model):
     finished_at = models.DateTimeField(null=True, blank=True)
     # {"Google": {"ok": true, "rows": 28114, "seconds": 61}, "Mist": {"ok": false, "error": "..."}}
     results = models.JSONField(default=dict, blank=True)
+    # While running: {"steps": ["Google", ...], "at": 1, "done": 12500, "total": 30100, "what": "assets"}
+    progress = models.JSONField(default=dict, blank=True)
+    cancelled_by = models.CharField(max_length=150, blank=True)  # set while running: stop at the next check
 
     class Meta:
         ordering = ["-created_at"]
@@ -31,6 +34,28 @@ class SyncRun(models.Model):
     @property
     def problems(self):
         return {name: r.get("error", "") for name, r in self.results.items() if not r.get("ok")}
+
+
+class SyncSchedule(models.Model):
+    """A time and days of the week to sync some or all systems."""
+
+    DAYS = "MTWTFSS"  # Monday first, as date.weekday() counts
+
+    enabled = models.BooleanField(default=True)
+    at = models.TimeField()  # in ATLAS_TIME_ZONE
+    days = models.CharField(max_length=7, default="0123456")  # weekday numbers
+    systems = models.CharField(max_length=100, blank=True)  # comma-separated platforms; blank: all of them
+    last_queued = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["at"]
+
+    @property
+    def platforms(self):
+        return [p for p in self.systems.split(",") if p]
+
+    def day_marks(self):
+        return [(letter, str(i) in self.days) for i, letter in enumerate(self.DAYS)]
 
 
 class Person(models.Model):
