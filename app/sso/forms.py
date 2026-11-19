@@ -14,9 +14,10 @@ class ClassLinkForm(forms.Form):
     )
     enabled = forms.BooleanField(label="Turn on ClassLink sign-in", required=False)
     create_accounts = forms.BooleanField(
-        label="Create accounts for new people",
+        label="Request accounts for new people",
         required=False,
-        help_text="On: anyone ClassLink sends gets a Technician account the first time. "
+        help_text="On: someone new who signs in with ClassLink gets an account that is waiting for approval. "
+                  "Turn on \u201cCan sign in\u201d on Users to let them in. "
                   "Off: only people already on Users (matched by email) can sign in.",
     )
 

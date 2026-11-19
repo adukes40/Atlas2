@@ -120,9 +120,14 @@ def find_or_create_user(identity, create):
     if user is None:
         if not create:
             raise SignInRefused("You do not have an Atlas account yet. Ask an Atlas administrator to add you.")
-        user = User(username=email, email=email, first_name=identity["first_name"], last_name=identity["last_name"])
+        # Starts turned off: an administrator approves it on Users before it can sign in.
+        user = User(username=email, email=email, first_name=identity["first_name"], last_name=identity["last_name"],
+                    is_active=False)
         user.set_unusable_password()  # ClassLink only, until an administrator sets one
         user.save()
+        raise SignInRefused("Your Atlas account was requested. An Atlas administrator needs to approve it before you can sign in.")
     if not user.is_active:
+        if user.last_login is None:
+            raise SignInRefused("Your Atlas account is still waiting for an administrator to approve it.")
         raise SignInRefused("Your Atlas account is turned off. Ask an Atlas administrator.")
     return user

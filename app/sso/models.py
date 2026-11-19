@@ -8,7 +8,8 @@ class ClassLinkConfig(models.Model):
     enabled = models.BooleanField(default=False)
     # ClassLink's IdP metadata XML. Public information, so stored as is.
     metadata = models.TextField(blank=True)
-    # On: anyone ClassLink signs in gets a Technician account on first visit.
+    # On: anyone new ClassLink signs in gets a turned-off Technician account,
+    # waiting for an administrator to approve it on Users.
     # Off: only people already on the Users screen (matched by email) get in.
     create_accounts = models.BooleanField(default=True)
 

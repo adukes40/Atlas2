@@ -96,13 +96,22 @@ class ClassLinkSignInTests(TestCase):
     def post(self, data, relay=""):
         return self.client.post(reverse("saml-acs"), {"SAMLResponse": data, "RelayState": relay}, HTTP_HOST=HOST, secure=True)
 
-    def test_first_sign_in_creates_a_technician(self):
+    def test_first_sign_in_requests_a_technician_account_waiting_for_approval(self):
         response = self.post(saml_response())
-        self.assertRedirects(response, reverse("device360"), fetch_redirect_response=False)
+        self.assertContains(response, "needs to approve it", status_code=403)
+        self.assertNotIn("_auth_user_id", self.client.session)
         user = User.objects.get(email="pat@schools.example")
+        self.assertFalse(user.is_active)
         self.assertFalse(user.is_superuser)
         self.assertFalse(user.has_usable_password())
         self.assertEqual((user.first_name, user.last_name), ("Pat", "Lee"))
+        # Again before approval: still waiting, no second account.
+        self.assertContains(self.post(saml_response()), "still waiting", status_code=403)
+        self.assertEqual(User.objects.count(), 1)
+        # Approved on Users: now they get in.
+        User.objects.filter(pk=user.pk).update(is_active=True)
+        self.assertRedirects(self.post(saml_response()), reverse("device360"), fetch_redirect_response=False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
 
     def test_matches_an_existing_person_by_email_and_keeps_their_role(self):
         admin = User.objects.create_superuser("pat", email="Pat@Schools.example", password="a-long-test-password")
@@ -118,7 +127,7 @@ class ClassLinkSignInTests(TestCase):
         self.assertFalse(User.objects.exists())
 
     def test_refuses_a_turned_off_account(self):
-        User.objects.create_user("pat", email="pat@schools.example", is_active=False)
+        User.objects.create_user("pat", email="pat@schools.example", is_active=False, last_login="2026-01-01T00:00Z")
         self.assertContains(self.post(saml_response()), "turned off", status_code=403)
 
     def test_refuses_a_response_signed_by_someone_else(self):
@@ -143,6 +152,7 @@ class ClassLinkSignInTests(TestCase):
         self.assertContains(self.post(saml_response(attributes=False)), "did not send an email", status_code=403)
 
     def test_relay_state_only_goes_to_atlas_pages(self):
+        User.objects.create_user("pat", email="pat@schools.example")
         response = self.post(saml_response(), relay="https://evil.example.com/")
         self.assertRedirects(response, reverse("device360"), fetch_redirect_response=False)
         response = self.post(saml_response(), relay="/reports/")
@@ -177,6 +187,11 @@ class ClassLinkSettingsTests(TestCase):
     def test_is_administrators_only(self):
         self.client.force_login(User.objects.create_user("tech"))
         self.assertEqual(self.get().status_code, 403)
+
+    def test_waiting_people_show_on_users_and_settings(self):
+        User.objects.create_user("pat", email="pat@schools.example", is_active=False)
+        self.assertContains(self.client.get(reverse("users"), HTTP_HOST=HOST, secure=True), "Waiting for approval")
+        self.assertContains(self.client.get(reverse("settings"), HTTP_HOST=HOST, secure=True), "1 waiting for approval")
 
     def test_shows_values_to_copy(self):
         self.assertContains(self.get(), ACS)

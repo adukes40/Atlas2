@@ -8,9 +8,9 @@
 <section class="card narrow">
   <div class="card-head"><h2>People who can sign in</h2><a href="{% url 'user-add' %}">Add a user</a></div>
   <dl>
-    {% for person in people %}<div class="kv"><dt><a href="{% url 'user-edit' person.pk %}">{{ person.get_username }}</a>{% if person.get_full_name %} <span class="muted">{{ person.get_full_name }}</span>{% endif %}</dt><dd>{% if not person.is_active %}<span class="chip">Turned off</span>{% elif person.is_superuser %}Administrator{% else %}Technician{% endif %}<br><span class="hint">{% if person.last_login %}Last signed in {{ person.last_login|date:"M j, Y" }}{% else %}Never signed in{% endif %}</span></dd></div>
+    {% for person in people %}<div class="kv"><dt><a href="{% url 'user-edit' person.pk %}">{{ person.get_username }}</a>{% if person.get_full_name %} <span class="muted">{{ person.get_full_name }}</span>{% endif %}</dt><dd>{% if not person.is_active and not person.last_login %}<span class="chip warn">Waiting for approval</span>{% elif not person.is_active %}<span class="chip">Turned off</span>{% elif person.is_superuser %}Administrator{% else %}Technician{% endif %}<br><span class="hint">{% if person.last_login %}Last signed in {{ person.last_login|date:"M j, Y" }}{% else %}Never signed in{% endif %}</span></dd></div>
     {% endfor %}
   </dl>
-  <p class="hint">Technicians can look up devices and see Reports. Administrators can also change Settings and manage users.</p>
+  <p class="hint">People who sign in with ClassLink for the first time wait for approval: open them and turn on “Can sign in”. Technicians can look up devices and see Reports. Administrators can also change Settings and manage users.</p>
 </section>
 {% endblock %}

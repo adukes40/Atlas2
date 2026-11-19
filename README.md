@@ -109,9 +109,10 @@ addresses for Atlas are built from the HTTPS name.
 3. Copy ClassLink's IdP metadata (the XML, or its metadata URL) back into
    Atlas, tick "Turn on ClassLink sign-in" and save.
 
-People are matched to existing Atlas users by email. With "Create accounts
-for new people" on, anyone else ClassLink signs in gets a Technician account;
-make someone an Administrator on the Users screen. Password sign-in always
+People are matched to existing Atlas users by email. With "Request accounts
+for new people" on, anyone else ClassLink signs in gets a turned-off
+Technician account marked "Waiting for approval" on Users; open it and turn
+on "Can sign in" to let them in (or make them an Administrator there). Password sign-in always
 stays available, so keep at least one administrator with a password.
 
 ## Update

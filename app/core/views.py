@@ -45,10 +45,11 @@ def settings_page(request):
         messages.success(request, "Settings saved.")
         return redirect("settings")
     users = get_user_model().objects.filter(is_active=True).count()
+    waiting = get_user_model().objects.filter(is_active=False, last_login__isnull=True).count()
     classlink_on = ClassLinkConfig.load().ready
     return render(
         request, "core/settings.html",
-        {"section": "settings", "form": form, "active_users": users, "classlink_on": classlink_on},
+        {"section": "settings", "form": form, "active_users": users, "waiting_users": waiting, "classlink_on": classlink_on},
     )
 
 
@@ -56,7 +57,11 @@ def settings_page(request):
 def users(request):
     if not request.user.is_superuser:
         raise PermissionDenied
-    people = get_user_model().objects.order_by("-is_active", "username")
+    # Waiting for approval (turned off, never signed in) first, then everyone signed in, then turned off.
+    people = sorted(
+        get_user_model().objects.order_by("username"),
+        key=lambda p: 0 if not p.is_active and not p.last_login else 1 if p.is_active else 2,
+    )
     return render(request, "core/users.html", {"section": "settings", "people": people})
 
 

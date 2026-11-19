@@ -20,7 +20,7 @@
   </section>
   <section class="card">
     <div class="card-head"><h2>Users</h2><a href="{% url 'users' %}">Manage users</a></div>
-    <p>{{ active_users }} {% if active_users == 1 %}person can{% else %}people can{% endif %} sign in.</p>
+    <p>{{ active_users }} {% if active_users == 1 %}person can{% else %}people can{% endif %} sign in.{% if waiting_users %} <a href="{% url 'users' %}"><strong>{{ waiting_users }} waiting for approval.</strong></a>{% endif %}</p>
     <div class="kv"><dt><a href="{% url 'settings-classlink' %}">ClassLink sign-in</a></dt><dd{% if classlink_on %} class="ok"{% endif %}>{% if classlink_on %}On{% else %}Off{% endif %}</dd></div>
   </section>
   <section class="card">
