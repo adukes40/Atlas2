@@ -88,6 +88,22 @@ class ThemeTests(TestCase):
         self.assertContains(page, "Example District")
         self.assertEqual(Organization.objects.count(), 1)
 
+    def test_a_local_theme_file_is_offered_by_its_comment_label(self):
+        import tempfile
+        from pathlib import Path
+
+        from .themes import local_themes
+
+        with tempfile.TemporaryDirectory() as folder:
+            Path(folder, "district-red.css").write_text("/* District Red: red sidebar */ :root {}")
+            Path(folder, "plain.css").write_text(":root {}")
+            Path(folder, "notes.txt").write_text("ignored")
+            found = local_themes(Path(folder))
+        self.assertEqual(found["local-district-red"]["label"], "District Red")
+        self.assertEqual(found["local-district-red"]["css"], "core/themes/local/district-red.css")
+        self.assertEqual(found["local-plain"]["label"], "Plain")
+        self.assertEqual(len(found), 2)
+
     def test_unknown_theme_is_rejected(self):
         response = self.client.post(reverse("settings"), {"name": "X", "theme": "nope"})
         self.assertEqual(response.status_code, 200)
