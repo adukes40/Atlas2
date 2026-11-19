@@ -1,0 +1,89 @@
+{% extends "core/base.html" %}
+{% block title %}{% if person.name %}{{ person.name }}{% else %}Person 360{% endif %}{% endblock %}
+{% block content %}
+{% if result.found %}
+<section class="card d-card">
+  <div class="d-head">
+    <div>
+      <p class="d-ids">{% if person.role %}<span class="chip">{{ person.role }}</span>{% endif %}{% if not result.active %} <span class="chip warn">Inactive</span>{% endif %} <span class="muted">{% if person.school_id %}ID <span class="mono">{{ person.school_id }}</span>{% endif %}{% if person.grade %} · Grade {{ person.grade }}{% endif %}{% if person.homeroom %} · Homeroom {{ person.homeroom }}{% endif %}</span></p>
+      <h1>{{ person.name|default:"Unknown" }}</h1>
+      <p class="d-links"><a href="{{ result.iiq_url }}/agent/users/{{ person.user_id|urlencode }}" target="_blank" rel="noopener">Open in Incident IQ</a> <span class="muted">{{ person.email }}{% if person.location %} · {{ person.location }}{% endif %}</span></p>
+    </div>
+    <div class="d-actions">
+      <span class="muted">Answered in {{ result.took_ms }} ms</span>
+      <a class="btn quiet" href="{% url 'person360' person.user_id %}">Refresh</a>
+    </div>
+  </div>
+  <div class="strip">
+    {% with first=result.assigned.0 %}
+    <div class="cell{% if not result.assigned %} at{% endif %}"><small><i></i>Assigned</small><b>{{ result.assigned|length }} device{{ result.assigned|length|pluralize }}</b><span>{% if first %}{{ first.key }}{% if first.assigned %} since {{ first.assigned|date:"M j" }}{% endif %}{% else %}Nothing assigned{% endif %}</span></div>
+    {% endwith %}
+    <div class="cell{% if result.not_theirs %} at{% endif %}"><small><i></i>Signed in to</small><b>{{ result.signed_in|length }} Chromebook{{ result.signed_in|length|pluralize }}</b><span>{% if result.not_theirs %}{{ result.not_theirs|length }} not theirs, {% endif %}last 30 days</span></div>
+    <div class="cell"><small><i></i>Google</small><b>{% if result.google_login %}{{ result.google_login|date:"M j, Y" }}{% else %}No sign-in{% endif %}</b><span>{{ person.google_ou|default:"No OU on record" }}</span></div>
+    {% if result.fees.owed %}
+    <div class="cell at"><small><i></i>Balance</small><b>{{ result.fees.balance_display }}</b><span>{% if result.fees.past_due %}{{ result.fees.past_due_display }} past due{% else %}Owed{% endif %}</span></div>
+    {% else %}
+    <div class="cell"><small><i></i>Balance</small><b>$0.00</b><span>Nothing owed</span></div>
+    {% endif %}
+    <div class="cell{% if result.open_tickets %} at{% endif %}"><small><i></i>Tickets</small><b>{{ result.open_tickets }} open</b><span>{% if result.total_tickets is not None %}{{ result.total_tickets }} all time{% else %}In Incident IQ{% endif %}</span></div>
+  </div>
+</section>
+
+{% if result.warnings %}
+<div class="alert" role="status">
+  <b>{{ result.warnings|length }} thing{{ result.warnings|length|pluralize }} to look at</b>
+  <ul>{% for warning in result.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><h2>Devices</h2><span class="src">Incident IQ · Google, via Incident IQ</span></div>
+  {% if result.devices %}
+  <div class="table-wrap"><table class="rep-table">
+    <thead><tr><th>Asset</th><th>Model</th><th>Assigned to them</th><th>They last signed in</th><th>Whose</th></tr></thead>
+    <tbody>
+    {% for d in result.devices %}
+    <tr>
+      <td><a href="{% url 'device360' %}?q={{ d.key|urlencode }}">{{ d.key }}</a></td>
+      <td>{{ d.model|default:"—" }}</td>
+      <td>{% if d.current and d.assigned %}Since {{ d.assigned|date:"M j, Y" }}{% elif d.current %}Now{% elif d.assigned %}{{ d.assigned|date:"M j, Y" }}{% else %}Never{% endif %}</td>
+      <td>{% if d.last_signed_in %}{{ d.last_signed_in|date:"M j, g:i A" }}{% else %}—{% endif %}</td>
+      <td><span class="chip{% if d.current %} ok{% elif d.someone_elses %} warn{% endif %}">{{ d.whose }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="note">Sign-ins cover the last 30 days. Older devices come from Incident IQ's assignment history.</p>
+  {% else %}
+  <p class="muted">Incident IQ has no devices assigned to or used by this person.</p>
+  {% endif %}
+</section>
+
+<div class="grid">
+  <section class="card">
+    <div class="card-head"><h2>Tickets</h2><span class="src">Incident IQ</span></div>
+    {% if result.tickets %}
+    <dl>{% for t in result.tickets %}<div class="kv"><dt{% if t.closed %} class="muted"{% endif %}>{% if t.closed %}#{{ t.number }}{% else %}<a href="{{ result.iiq_url }}/agent/tickets/{{ t.ticket_id|urlencode }}" target="_blank" rel="noopener">#{{ t.number }}</a>{% endif %}</dt><dd{% if t.closed %} class="muted"{% endif %}>{{ t.subject }}{% if t.status %} · {{ t.status }}{% endif %}{% if t.opened %} · {{ t.opened }}{% endif %}</dd></div>{% endfor %}</dl>
+    {% else %}
+    <p class="muted">No tickets.</p>
+    {% endif %}
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Classes</h2><span class="src">SIS, via Incident IQ</span></div>
+    {% if result.classes %}
+    <dl>{% for c in result.classes %}<div class="kv"><dt>{{ c.name }}</dt><dd>{% if c.course and c.course != c.name %}{{ c.course }}{% if c.place %} · {% endif %}{% endif %}{{ c.place }}</dd></div>{% endfor %}</dl>
+    {% else %}
+    <p class="muted">No classes from the SIS.</p>
+    {% endif %}
+  </section>
+</div>
+{% if result.missing %}<p class="note">Incident IQ did not answer for: {{ result.missing|join:", " }}.</p>{% endif %}
+
+{% else %}
+<div><h1>Person 360</h1></div>
+<section class="card narrow" aria-live="polite">
+  <div class="card-head"><h2>Could not open this person</h2></div>
+  <p>{{ result.message|default:"Incident IQ has no one with that ID." }}</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -72,7 +72,7 @@
   <section class="card">
     <div class="card-head"><h2>Who has it</h2><span class="src">Incident IQ</span></div>
     {% if device.owner %}
-    <p class="who"><b>{{ device.owner.name|default:"Unknown" }}</b>{% if device.owner.user_id %} <a href="{{ result.iiq_url }}/agent/users/{{ device.owner.user_id|urlencode }}" target="_blank" rel="noopener">Incident IQ</a>{% endif %}</p>
+    <p class="who"><b>{% if device.owner.user_id %}<a href="{% url 'person360' device.owner.user_id %}">{{ device.owner.name|default:"Unknown" }}</a>{% else %}{{ device.owner.name|default:"Unknown" }}{% endif %}</b>{% if device.owner.user_id %} <a href="{{ result.iiq_url }}/agent/users/{{ device.owner.user_id|urlencode }}" target="_blank" rel="noopener">Incident IQ</a>{% endif %}</p>
     {% if device.owner.role %}<p class="muted">{{ device.owner.role }}</p>{% endif %}
     <dl>
       {% if device.owner.school_id %}<div class="kv"><dt>ID</dt><dd class="mono">{{ device.owner.school_id }}</dd></div>{% endif %}
@@ -211,9 +211,13 @@
 {% elif result %}
 <div><h1>Device 360</h1></div>
 <section class="card narrow" aria-live="polite">
-  {% if result.state == "not_found" %}
+  {% if result.state == "not_found" and people %}
+  <div class="card-head"><h2>{{ people|length }} people match</h2><span class="src mono">{{ query }}</span></div>
+  <dl>{% for p in people %}<div class="kv"><dt><a href="{% url 'person360' p.user_id %}">{{ p.name|default:p.email }}</a></dt><dd>{{ p.role }}{% if p.grade %} · Grade {{ p.grade }}{% endif %}{% if p.school %} · {{ p.school }}{% endif %}{% if not p.active %} · inactive{% endif %}</dd></div>{% endfor %}</dl>
+  {% if people|length == 20 %}<p class="muted">Showing the first 20. Type more of the name to narrow it.</p>{% endif %}
+  {% elif result.state == "not_found" %}
   <div class="card-head"><h2>Nothing found</h2><span class="src mono">{{ query }}</span></div>
-  <p>Incident IQ has no device with that asset tag or serial number.</p>
+  <p>Incident IQ has no device with that asset tag or serial number, and no one in the last nightly copy has that name, email or ID.</p>
   <p class="muted">Check for a typo, or scan the tag again.</p>
   {% elif result.state == "not_connected" %}
   <div class="card-head"><h2>Nothing to look up yet</h2><span class="src mono">{{ query }}</span></div>

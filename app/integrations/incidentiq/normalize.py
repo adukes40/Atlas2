@@ -69,6 +69,7 @@ class Ticket:
     subject: str = ""
     status: str = ""
     opened: str = ""  # YYYY-MM-DD
+    closed: bool = False
 
 
 @dataclass
@@ -197,6 +198,7 @@ def normalize_ticket(raw):
         subject=_text(raw.get("Subject")),
         status=_text((raw.get("WorkflowStep") or {}).get("StepName")),
         opened=_text(raw.get("CreatedDate"))[:10],
+        closed=raw.get("IsClosed") is True,
     )
 
 

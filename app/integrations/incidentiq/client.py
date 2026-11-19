@@ -169,6 +169,31 @@ class IncidentIQClient:
             "POST", "/apps/googleDeviceData/api/googleDeviceData/data/assets/get-google-device", json={"AssetId": asset_id}
         )
 
+    # One person, for Person 360. These are the calls Incident IQ's own user page makes.
+
+    def assets_for(self, user_id):
+        return self._request("GET", f"/assets/for/{quote(user_id, safe='')}").get("Items") or []
+
+    def device_history(self, user_id):
+        return self._request("GET", f"/users/{quote(user_id, safe='')}/device-history").get("Items") or []
+
+    def devices_used(self, user_id, days=30):
+        """Chromebooks this person signed in to, from Incident IQ's Google Device Data app."""
+        data = self._request("GET", f"/apps/googleDeviceData/api/googleDeviceData/data/assets/usage/{quote(user_id, safe='')}/{days}")
+        return data.get("Items") or []
+
+    def ticket_stats(self, user_id):
+        data = self._request("GET", f"/analytics/requestor/{quote(user_id, safe='')}/summary-stats")
+        return data.get("Item") if isinstance(data.get("Item"), dict) else data
+
+    def user_tickets(self, user_id):
+        """The person's 50 newest tickets, open or closed."""
+        data = self._request("POST", "/tickets?$s=50", json={"Schema": "All", "Filters": [{"Facet": "user", "Id": user_id}]})
+        return [item for item in data.get("Items") or [] if isinstance(item, dict)]
+
+    def classes(self, user_id):
+        return self._request("GET", f"/sis/classes/for/user/{quote(user_id, safe='')}").get("Items") or []
+
     def open_tickets(self, asset_id, user_id):
         """Open tickets on one asset (at most 50 of its person's tickets are read).
 

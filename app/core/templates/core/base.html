@@ -47,7 +47,7 @@
     <header class="topbar">
       <form class="lookup" role="search" method="get" action="{% url 'device360' %}">
         <div>
-          <label for="q">Asset tag or serial number</label>
+          <label for="q">Asset tag, serial, or a person's name, email or ID</label>
           <input id="q" name="q" type="text" value="{{ query|default:'' }}" autocomplete="off" spellcheck="false" placeholder="Type or scan, then press Enter"{% if section == 'device360' %} autofocus{% endif %}>
         </div>
         <button class="btn" type="submit">Look up</button>

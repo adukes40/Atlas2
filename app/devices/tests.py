@@ -157,7 +157,7 @@ class LookupTests(TestCase):
 
     def test_not_found(self):
         page, _ = self.look_up("999999")
-        self.assertContains(page, "Incident IQ has no device with that asset tag or serial number.")
+        self.assertContains(page, "Incident IQ has no device with that asset tag or serial number")
         entry = LookupLog.objects.get()
         self.assertEqual((entry.query, entry.found, entry.user), ("999999", False, self.tech))
         self.assertNotContains(page, "Open lookups")
@@ -447,3 +447,72 @@ class GoogleAndNetworkTests(TestCase):
         page = self.look_up(dict(STANDARD_OTHERS, **{f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search": FakeResponse(status=401)}))
         self.assertContains(page, "Meraki: Meraki rejected the API key")
         self.assertEqual(MerakiConfig.load().state, "Error")
+
+
+@override_settings(ATLAS_ENCRYPTION_KEY=TEST_KEY)
+class PersonTests(TestCase):
+    """Person 360, from the calls Incident IQ's own user page makes. Made-up people."""
+
+    def setUp(self):
+        from reports.models import Device as CopiedDevice, Person as CopiedPerson
+
+        self.client.force_login(User.objects.create_user("tech"))
+        config = IncidentIQConfig.load()
+        config.base_url = BASE
+        config.set_token(TOKEN)
+        config.save()
+        CopiedPerson.objects.create(user_id="u-1", name="Jordan Sample", email="jsample@students.example",
+                                    school_id="204817", role="Student", active=True)
+        CopiedPerson.objects.create(user_id="u-9", name="Jamie Park", email="jpark@students.example", role="Student")
+        CopiedDevice.objects.create(serial="OTHER1", asset_tag="103991", in_iiq=True, owner_id="u-9")
+
+    def routes(self):
+        google = json.dumps([{"LastLoginDate": "2026-11-18", "OrgUnitPath": "/Students/North"}])
+        return {
+            **STANDARD,
+            "/users/u-1": FakeResponse(data={"Item": {
+                "UserId": "u-1", "FullName": "Jordan Sample", "Email": "jsample@students.example", "RoleName": "Student",
+                "Grade": "7", "Homeroom": "B214", "SchoolIdNumber": "204817", "IsActive": True,
+                "CustomFieldValues": [{"Value": google}]}}),
+            "/assets/for/u-1": items(asset()),
+            "/users/u-1/device-history": items(
+                {"AssetId": "a-1", "AssetTag": "104482", "SerialNumber": "7XK2RT3", "ModelName": "Dell Chromebook 3110",
+                 "AssignedDateUtc": "2026-08-21T12:00:00Z", "IsAssetDeleted": False},
+                {"AssetId": "a-old", "AssetTag": "98213", "SerialNumber": "OLD1", "ModelName": "Lenovo 100e",
+                 "AssignedDateUtc": "2025-09-02T12:00:00Z", "IsAssetDeleted": False}),
+            "/analytics/requestor/u-1/summary-stats": FakeResponse(data={"Item": {"OpenTickets": 1, "TotalTickets": 6}}),
+            "/sis/classes/for/user/u-1": items({"Name": "Math 7", "CourseName": "Math 7", "LocationName": "North Middle School", "IsActive": True}),
+        }
+
+    def others(self):
+        usage = f"{BASE}/apps/googleDeviceData/api/googleDeviceData/data/assets/usage/u-1/30"
+        return {usage: FakeResponse(data={"Items": [
+            {"AssetTag": "103991 | Jamie Park | North", "SerialNumber": "OTHER1", "Model": "Dell Chromebook 3110",
+             "UsageHistory": [{"UserId": "u-1", "Username": "jsample@students.example",
+                               "StartDate": "2026-11-03T08:00:00Z", "EndDate": "2026-11-03T09:00:00Z"},
+                              {"UserId": "u-9", "Username": "jpark@students.example", "StartDate": "2026-11-18T08:00:00Z"}]},
+        ]})}
+
+    def test_a_person_page_gathers_devices_tickets_and_classes(self):
+        with incident_iq(self.routes(), others=self.others()):
+            page = self.client.get(reverse("person360", args=["u-1"]))
+        for expected in ("Jordan Sample", "Homeroom B214", "/Students/North", "Nov 18, 2026", "Theirs", "Jamie Park&#x27;s",
+                         "Was theirs", "Signed in to 103991 on Nov 3, which is assigned to Jamie Park.", "6 all time",
+                         "Cracked screen", "Math 7"):
+            self.assertContains(page, expected)
+
+    def test_a_part_that_fails_is_noted_and_the_rest_still_shows(self):
+        routes = self.routes()
+        routes["/sis/classes/for/user/u-1"] = FakeResponse(status=403)
+        with incident_iq(routes, others=self.others()):
+            page = self.client.get(reverse("person360", args=["u-1"]))
+        self.assertContains(page, "Jordan Sample")
+        self.assertContains(page, "Incident IQ did not answer for: classes.")
+
+    def test_the_lookup_box_finds_people_by_name_email_or_id(self):
+        with incident_iq(STANDARD):
+            page = self.client.get(reverse("device360"), {"q": "204817"})
+        self.assertRedirects(page, reverse("person360", args=["u-1"]), fetch_redirect_response=False)
+        with incident_iq(STANDARD):
+            page = self.client.get(reverse("device360"), {"q": "am"})  # in both made-up names
+        self.assertContains(page, "2 people match")

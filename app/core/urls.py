@@ -10,6 +10,7 @@ from . import views
 urlpatterns = [
     path("", device_views.device360, name="device360"),
     path("lookups/close/", device_views.close_lookup, name="close-lookup"),
+    path("people/<str:user_id>/", device_views.person360, name="person360"),
     path("", include("reports.urls")),
     path("settings/", views.settings_page, name="settings"),
     path("settings/users/", views.users, name="users"),
