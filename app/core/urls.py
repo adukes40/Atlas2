@@ -26,6 +26,7 @@ urlpatterns = [
     path("sso/classlink/metadata/", sso_views.metadata, name="saml-metadata"),
     path("system/", views.system, name="system"),
     path("appearance/", views.appearance, name="appearance"),
+    path("theme.css", views.uploaded_theme, name="uploaded-theme"),
     path("healthz/", views.healthz, name="healthz"),
     path("login/", sso_views.SignIn.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

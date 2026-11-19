@@ -16,6 +16,3 @@ app/staticfiles/
 CLAUDE.md
 HANDOFF.md
 atlas-root-ca.crt
-
-# A district's own themes stay on its server
-app/core/static/core/themes/local/*.css
