@@ -314,6 +314,16 @@ class GoogleAndNetworkTests(TestCase):
         with incident_iq(STANDARD, others=others):
             return self.client.get(self.url, {"q": "104482"})
 
+    def test_without_google_the_state_card_uses_incident_iqs_google_sync(self):
+        synced = json.dumps([{"LastSyncDate": "2026-11-02", "OrgUnitPath": "/Students/North", "ChromebookStatus": "ACTIVE",
+                              "RecentUserEmail": "friend@students.example", "ChromebookAutoUpdateExpiration": "2031-06-01"}])
+        routes = {**STANDARD, "/assets/assettag/104482": items(asset(CustomFieldValues=[{"Value": synced}]))}
+        with incident_iq(routes, others=STANDARD_OTHERS):
+            page = self.client.get(self.url, {"q": "104482"})
+        self.assertContains(page, "Google, via Incident IQ")
+        self.assertContains(page, "/Students/North")
+        self.assertContains(page, "the last sign-in Google saw was friend@students.example")
+
     def test_nothing_else_connected_reads_as_before(self):
         page = self.look_up()
         self.assertContains(page, "Jordan Sample")

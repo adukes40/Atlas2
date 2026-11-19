@@ -13,7 +13,7 @@ from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
-from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
+from .models import DailyCount, Device, NetDevice, SavedReport, SwitchPort, SyncRun
 from .sync import PLATFORMS, as_of, connected, request_sync, sync_zone
 
 PAGE_SIZE = 100
@@ -45,13 +45,20 @@ def platform_times(when=None):
     return [(p, _stamp(when[p]) if p in when else "never") for p in PLATFORMS if p in on]
 
 
+def _filled():
+    """Systems the copy has data from: the connected ones, plus Google when
+    Incident IQ's own Google sync filled it in."""
+    on = connected()
+    return on | {"Google"} if Device.objects.filter(in_google=True).exists() else on
+
+
 def _shared(request, current=""):
     counts = _counts()
     when = as_of()
     newest = SyncRun.objects.exclude(state=SyncRun.REQUESTED).first()
     return {
         "section": "reports",
-        "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library(connected())],
+        "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library(_filled())],
         "saved": SavedReport.objects.filter(user=request.user),
         "current": current,
         # The oldest platform's copy, so "as of" never claims fresher data than a report shows.

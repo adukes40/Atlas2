@@ -224,3 +224,32 @@ def normalize_user(raw):
     )
     active = raw.get("IsActive", True) is not False and not raw.get("IsDeleted")
     return person, _fees(raw), active
+
+
+def google_device(raw):
+    """The Chromebook record Incident IQ's Google sync keeps on an asset, in the
+    shape Google's own API uses, or None. Incident IQ stores it as a custom
+    field holding a JSON list; it is found by its shape, so no field ID is needed.
+    It has no ChromeOS version, MAC addresses or hardware details."""
+    for custom in raw.get("CustomFieldValues") or []:
+        value = custom.get("Value") if isinstance(custom, dict) else None
+        if not isinstance(value, str) or "OrgUnitPath" not in value:
+            continue
+        try:
+            rows = json.loads(value)
+        except ValueError:
+            continue
+        row = (rows[0] if isinstance(rows, list) and rows else rows) if rows else None
+        if not isinstance(row, dict):
+            continue
+        email = _text(row.get("RecentUserEmail"))
+        return {
+            "serialNumber": _text(raw.get("SerialNumber")),
+            "model": _text((raw.get("Model") or {}).get("Name")),
+            "status": _text(row.get("ChromebookStatus")),
+            "orgUnitPath": _text(row.get("OrgUnitPath")),
+            "lastSync": _text(row.get("LastSyncDate")),
+            "autoUpdateThrough": _text(row.get("ChromebookAutoUpdateExpiration")),
+            "recentUsers": [{"email": email}] if email else [],
+        }
+    return None

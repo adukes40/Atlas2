@@ -118,7 +118,7 @@
 
   {% if result.google.state != "not_connected" %}
   <section class="card">
-    <div class="card-head"><h2>What state it's in</h2><span class="src">Google</span></div>
+    <div class="card-head"><h2>What state it's in</h2><span class="src">{{ result.google_source }}</span></div>
     {% if book %}
     <dl>
       {% if book.os_version %}<div class="kv"><dt>ChromeOS</dt><dd class="mono">{{ book.os_version }}</dd></div>{% endif %}

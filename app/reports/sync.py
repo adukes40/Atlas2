@@ -22,7 +22,7 @@ from django.utils import timezone
 from core.models import Organization
 from integrations.errors import IntegrationError
 from integrations.google.normalize import normalize_chromebook
-from integrations.incidentiq.normalize import normalize_asset, normalize_user
+from integrations.incidentiq.normalize import google_device, normalize_asset, normalize_user
 from integrations.meraki.normalize import normalize_gear, normalize_ports
 from integrations.mist.normalize import normalize_ap, normalize_psk, normalize_wlan
 from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
@@ -134,6 +134,9 @@ def collect_and_rebuild(platforms=()):
         return results, gear_ok
     if google is None or iiq is None:
         return results, False
+    if not GoogleConfig.load().configured and iiq is not KEEP:
+        # No Google key: use what Incident IQ's own Google sync keeps on each asset.
+        google = {book["serialNumber"].upper(): book for book in map(google_device, iiq[0]) if book and book["serialNumber"]}
     started = time.monotonic()
     devices, people = rebuild(google, *(iiq if iiq is not KEEP else (KEEP, KEEP)), google_on=GoogleConfig.load().configured)
     results["Atlas"] = {"ok": True, "detail": f"{devices:,} devices and {people:,} people ready for reports",

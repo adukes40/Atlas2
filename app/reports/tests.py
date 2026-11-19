@@ -169,6 +169,17 @@ class SyncTests(TestCase):
         self.assertEqual(Person.objects.get(user_id="u-3").chromebooks, 0)
         self.assertEqual(catalog.count(BY_SLUG["no-chromebook"]), 1)  # u-3, who has only a laptop
 
+    def test_without_google_incident_iqs_google_sync_fills_the_google_fields(self):
+        GoogleConfig.objects.all().delete()
+        synced = json.dumps([{"LastSyncDate": "2026-01-02", "OrgUnitPath": "/Students/North", "ChromebookStatus": "DISABLED",
+                              "RecentUserEmail": "friend@students.example", "ChromebookAutoUpdateExpiration": "2031-06-01"}])
+        routes = {**IIQ_ROUTES, "/assets": page(asset(CustomFieldValues=[{"Value": synced}]))}
+        self.assertEqual(sync(routes).state, SyncRun.DONE)
+        device = Device.objects.get(serial="7XK2RT3")
+        self.assertEqual((device.in_google, device.org_unit, device.google_status), (True, "/Students/North", "Disabled"))
+        self.assertTrue(device.signed_in_by_other)
+        self.assertEqual(catalog.count(BY_SLUG["disabled-but-assigned"]), 1)
+
     def test_a_google_failure_keeps_yesterdays_copy(self):
         sync()
         run = sync(google=FakeResponse(status=403))
@@ -304,6 +315,7 @@ class PageTests(TestCase):
     def test_with_only_incident_iq_the_google_and_network_reports_are_hidden(self):
         GoogleConfig.objects.all().delete()
         MistConfig.objects.all().delete()
+        Device.objects.update(in_google=False)  # as if Incident IQ had no Google sync either
         page = self.client.get(reverse("reports"))
         self.assertContains(page, "Fee balances")
         self.assertNotContains(page, "Fleet overview")

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from integrations.errors import IntegrationError
 from integrations.google.normalize import Chromebook, normalize_chromebook
 from integrations.incidentiq.client import IncidentIQError
-from integrations.incidentiq.normalize import Device, normalize_asset, normalize_ticket, normalize_user_fees
+from integrations.incidentiq.normalize import Device, google_device, normalize_asset, normalize_ticket, normalize_user_fees
 from integrations.meraki import normalize as meraki_normalize
 from integrations.mist import normalize as mist_normalize
 from integrations.models import GoogleConfig, IncidentIQConfig, IncidentIQLocation, MerakiConfig, MistConfig
@@ -37,6 +37,7 @@ class LookupResult:
     tickets_message: str = ""  # why open tickets could not be listed
     google: Part = field(default_factory=lambda: Part("Google Workspace"))
     chromebook: Chromebook | None = None
+    google_source: str = "Google"  # or "Google, via Incident IQ" when Google itself is not connected
     network: list[Part] = field(default_factory=list)  # Mist, then Meraki
     sightings: list[Sighting] = field(default_factory=list)  # most recent first
 
@@ -114,7 +115,8 @@ def lookup(query):
     started = time.monotonic()
     try:
         client = config.client()
-        devices = [normalize_asset(raw) for raw in client.find_assets(query)]
+        raw_assets = client.find_assets(query)
+        devices = [normalize_asset(raw) for raw in raw_assets]
         for device in devices:
             if device.owner:
                 device.owner.location = _school_name(client, device.owner.location_id)
@@ -128,6 +130,8 @@ def lookup(query):
         _add_owner_fees(client, result.device)
         _add_tickets(client, result.device, result)
         _add_google(result)
+        if not GoogleConfig.load().configured:
+            _add_google_from_iiq(result, raw_assets[0])
         _add_network(result)
         _add_connection(result)
     result.took_ms = int((time.monotonic() - started) * 1000)
@@ -180,6 +184,14 @@ def _add_google(result):
     if raw:
         result.google.state = FOUND
         result.chromebook = normalize_chromebook(raw)
+
+
+def _add_google_from_iiq(result, raw):
+    """What Incident IQ's own Google sync recorded, when Atlas has no Google key."""
+    book = google_device(raw)
+    if book:
+        result.google.state, result.google_source = FOUND, "Google, via Incident IQ"
+        result.chromebook = normalize_chromebook(book)
 
 
 def _mist(client, macs):
