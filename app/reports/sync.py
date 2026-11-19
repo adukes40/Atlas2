@@ -39,6 +39,50 @@ SYNC_RETRIES = 3
 KEEP = object()  # a platform not synced this time: rebuild from what the copy has
 
 
+class Cancelled(Exception):
+    """Someone pressed Cancel sync."""
+
+
+class Progress:
+    """Writes how far the running sync has got onto its SyncRun, at most
+    every few seconds, and stops the sync when someone has cancelled it."""
+
+    EVERY = 2  # seconds between writes
+
+    def __init__(self, run, steps):
+        self.run, self.steps, self.at, self.written = run, steps, -1, 0.0
+
+    def step(self, name):
+        self.at = self.steps.index(name) if name in self.steps else self.at
+        self.tick(0, None, "", force=True)
+
+    def tick(self, done, total=None, what="", force=False):
+        if not force and time.monotonic() - self.written < self.EVERY:
+            return
+        self.written = time.monotonic()
+        progress = {"steps": self.steps, "at": self.at, "done": done, "total": total, "what": what}
+        SyncRun.objects.filter(pk=self.run.pk).update(progress=progress)
+        cancelled_by = SyncRun.objects.filter(pk=self.run.pk).values_list("cancelled_by", flat=True).first()
+        if cancelled_by:
+            raise Cancelled(cancelled_by)
+
+
+class _Quiet:
+    """Progress for a sync with no SyncRun behind it (tests, the shell)."""
+
+    def step(self, name):
+        pass
+
+    def tick(self, *args, **kwargs):
+        pass
+
+
+progress = _Quiet()  # the running sync's Progress; one sync runs at a time
+
+
+CONFIGS = {"Google": GoogleConfig, "Incident IQ": IncidentIQConfig, "Mist": MistConfig, "Meraki": MerakiConfig}
+
+
 PLATFORMS = {  # each platform and the sync steps it runs
     "Google": ("Google",),
     "Incident IQ": ("Incident IQ",),
@@ -87,26 +131,48 @@ def run_pending():
     return run
 
 
+def cancel(run_id, who):
+    """Stop a sync: a waiting one at once, a running one at its next check."""
+    stopped = {"cancelled_by": who, "finished_at": timezone.now(), "state": SyncRun.CANCELLED}
+    if not SyncRun.objects.filter(pk=run_id, state=SyncRun.REQUESTED).update(**stopped):
+        SyncRun.objects.filter(pk=run_id, state=SyncRun.RUNNING, cancelled_by="").update(cancelled_by=who)
+
+
 def execute(run):
+    global progress
     run.state, run.started_at = SyncRun.RUNNING, timezone.now()
-    run.save()
+    run.save(update_fields=["state", "started_at"])  # not cancelled_by: a Cancel may already be in
+    want = set(run.platforms or PLATFORMS)
+    steps = [step for platform, names in PLATFORMS.items()
+             if platform in want and CONFIGS[platform].load().configured for step in names]
+    if want & {"Google", "Incident IQ", "Mist"}:
+        steps.append("Atlas")
+    progress = Progress(run, steps)
+    run.results = {}
     try:
-        run.results, ok = collect_and_rebuild(run.platforms)
+        progress.step(steps[0] if steps else "")
+        run.results, ok = collect_and_rebuild(run.platforms, run.results)
         run.state = SyncRun.DONE if ok else SyncRun.FAILED
+    except Cancelled as stop:
+        # Every step that finished kept its data; Reports were not rebuilt.
+        run.state, run.cancelled_by = SyncRun.CANCELLED, str(stop)
     except Exception:
         log.exception("Sync stopped")
         run.results = {**run.results, "Atlas": {"ok": False, "error": "The sync stopped on an unexpected error. The sync log has the details."}}
         run.state = SyncRun.FAILED
-    run.finished_at = timezone.now()
+    finally:
+        progress = _Quiet()
+    run.finished_at, run.progress = timezone.now(), {}
     run.save()
     return run
 
 
-def collect_and_rebuild(platforms=()):
+def collect_and_rebuild(platforms=(), results=None):
     """Sync these platforms (all when none are named). Platforms not asked for
-    keep what the copy already has. Returns (results, whether it went well)."""
+    keep what the copy already has. Fills results as each step finishes.
+    Returns (results, whether it went well)."""
     want = set(platforms or PLATFORMS)
-    results = {}
+    results = {} if results is None else results
     google = _step(results, "Google", GoogleConfig, _google) if "Google" in want else KEEP
     iiq = _step(results, "Incident IQ", IncidentIQConfig, _incidentiq) if "Incident IQ" in want else KEEP
     if "Mist" in want:
@@ -126,6 +192,7 @@ def collect_and_rebuild(platforms=()):
         return results, gear_ok
     if google is None or iiq is None:
         return results, False
+    progress.step("Atlas")
     started = time.monotonic()
     devices, people = rebuild(google, *(iiq if iiq is not KEEP else (KEEP, KEEP)), google_on=GoogleConfig.load().configured)
     results["Atlas"] = {"ok": True, "detail": f"{devices:,} devices and {people:,} people ready for reports",
@@ -141,6 +208,7 @@ def _step(results, name, config_class, fetch):
     if not config.configured:
         results[name] = {"ok": True, "detail": "Not connected, skipped"}
         return {} if name != "Incident IQ" else ([], [])
+    progress.step(name)
     started = time.monotonic()
     try:
         client = config.client()
@@ -159,10 +227,11 @@ def _google(client):
         serial = str(raw.get("serialNumber") or "").strip().upper()
         if serial:
             found[serial] = raw
+            progress.tick(len(found), None, "Chromebooks")
     return found, f"{len(found):,} Chromebooks"
 
 
-def _pages(fetch, id_key):
+def _pages(fetch, id_key, what=""):
     """Every row of a paged Incident IQ list, each once."""
     rows, seen = [], set()
     for index in range(MAX_PAGES):
@@ -173,6 +242,7 @@ def _pages(fetch, id_key):
                 seen.add(str(item.get(id_key)))
                 rows.append(item)
                 new += 1
+        progress.tick(len(rows), total, what)
         # Stop at the end, or when a page brings nothing new (paging ignored).
         if not new or (total is not None and len(rows) >= total) or (total is None and len(items) < PAGE):
             break
@@ -180,14 +250,15 @@ def _pages(fetch, id_key):
 
 
 def _incidentiq(client):
-    assets = _pages(client.assets_page, "AssetId")
-    people = _pages(client.users_page, "UserId")
+    assets = _pages(client.assets_page, "AssetId", "assets")
+    people = _pages(client.users_page, "UserId", "people")
     return (assets, people), f"{len(assets):,} assets, {len(people):,} people"
 
 
 def _mist(client, macs):
     latest = {}
-    for raw in client.clients_seen("1d"):
+    for count, raw in enumerate(client.clients_seen("1d"), 1):
+        progress.tick(count, None, "Wi-Fi clients")
         mac = mac_plain(raw.get("mac"))
         stamp = raw.get("timestamp")
         if mac in macs and isinstance(stamp, (int, float)) and stamp > latest.get(mac, {}).get("timestamp", 0):

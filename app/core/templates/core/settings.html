@@ -3,6 +3,17 @@
 {% block content %}
 <h1>Settings</h1>
 <div class="grid">
+  <section class="card wide">
+    <div class="card-head"><h2>Sync schedules</h2><a class="btn quiet sm" href="{% url 'schedule-add' %}">Add schedule</a></div>
+    {% for s in schedules %}<div class="sched{% if not s.enabled %} off{% endif %}">
+      <form method="post" action="{% url 'schedule-toggle' s.pk %}">{% csrf_token %}<button class="toggle" type="submit" role="switch" aria-checked="{{ s.enabled|yesno:'true,false' }}" aria-label="{{ s.at|time:'g:i A' }} schedule {{ s.enabled|yesno:'on,off' }}" title="Turn {{ s.enabled|yesno:'off,on' }}"></button></form>
+      <b>{{ s.at|time:"g:i A" }}</b>
+      <div><div>{% if s.platforms %}{{ s.platforms|join:", " }}{% else %}All systems{% endif %}</div>
+        <div class="days" aria-label="Days">{% for letter, on in s.day_marks %}<span{% if on %} class="on"{% endif %}>{{ letter }}</span>{% endfor %}</div></div>
+      <a href="{% url 'schedule-edit' s.pk %}">Edit</a>
+    </div>{% empty %}<p class="muted">No schedules. Reports only update when someone presses Sync now.</p>{% endfor %}
+    <p class="hint">Times are {{ sync_tz }}. If a schedule comes up while another sync is running, it waits its turn.</p>
+  </section>
   <section class="card">
     <div class="card-head"><h2>Organization</h2></div>
     <form method="post">

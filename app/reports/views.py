@@ -2,19 +2,23 @@ import csv
 from datetime import timedelta
 from urllib.parse import quote
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django import forms
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.timesince import timesince
 from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
-from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
-from .sync import PLATFORMS, as_of, request_sync, sync_zone
+from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun, SyncSchedule
+from .sync import PLATFORMS, as_of, cancel, request_sync, sync_zone
 
 PAGE_SIZE = 100
 
@@ -47,7 +51,7 @@ def platform_times(when=None):
 def _shared(request, current=""):
     counts = _counts()
     when = as_of()
-    newest = SyncRun.objects.exclude(state=SyncRun.REQUESTED).first()
+    newest = SyncRun.objects.exclude(state__in=[SyncRun.REQUESTED, SyncRun.CANCELLED]).first()
     return {
         "section": "reports",
         "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library()],
@@ -57,7 +61,7 @@ def _shared(request, current=""):
         "data_as_of": _stamp(min(when.values())) if when else None,
         "platforms": platform_times(when),
         "sync_problems": newest.problems if newest and newest.problems else {},
-        "sync_waiting": SyncRun.objects.filter(state__in=[SyncRun.REQUESTED, SyncRun.RUNNING]).exists(),
+        "sync": sync_status(),
     }
 
 
@@ -336,3 +340,123 @@ def sync_now(request):
     what = " and ".join(chosen) if chosen else "Everything"
     messages.success(request, f"{what} queued to sync. It usually takes a few minutes; reports update when it finishes.")
     return redirect(target)
+
+
+STEP_NAMES = {"Atlas": "Building reports"}
+
+
+def sync_status():
+    """The running (or else waiting) sync and how far it has got, or None."""
+    run = SyncRun.objects.filter(state=SyncRun.RUNNING).first() or \
+        SyncRun.objects.filter(state=SyncRun.REQUESTED).order_by("created_at").first()
+    if not run:
+        return None
+    p = run.progress
+    names, at, done, total, what = p.get("steps", []), p.get("at", -1), p.get("done", 0), p.get("total"), p.get("what", "")
+    part = min(done / total, 1) if total else 0
+    if total:
+        doing = f"{done:,} of {total:,} {what}"
+    elif done:
+        doing = f"{done:,} {what} so far"
+    else:
+        doing = "Starting"
+    steps = []
+    for i, name in enumerate(names):
+        result = run.results.get(name)
+        if i == at and not result:
+            steps.append({"name": STEP_NAMES.get(name, name), "state": "running", "percent": round(part * 100),
+                          "detail": doing, "known": bool(total)})
+        elif result:
+            steps.append({"name": STEP_NAMES.get(name, name), "state": "done" if result.get("ok") else "failed",
+                          "percent": 100, "detail": result.get("detail") or result.get("error", "")})
+        else:
+            steps.append({"name": STEP_NAMES.get(name, name), "state": "waiting", "percent": 0, "detail": "Waiting"})
+    current = steps[at] if 0 <= at < len(steps) else None
+    return {
+        "run": run,
+        "steps": steps,
+        "current": current,
+        "number": at + 1,
+        "percent": round((max(at, 0) + part) / len(names) * 100) if names else 0,
+    }
+
+
+@login_required
+def sync_progress(request):
+    """The progress bar alone, which the page fetches every few seconds."""
+    return render(request, "reports/sync_progress.html", {"sync": sync_status(), "full": request.GET.get("full") == "1"})
+
+
+@login_required
+@require_POST
+def cancel_sync(request, pk):
+    cancel(pk, request.user.get_username())
+    messages.success(request, "Sync cancelled. Reports keep the data they had before it.")
+    # Back to the page the button was on; this form is fetched in, so it carries no "next".
+    back = request.headers.get("Referer", "")
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else "reports")
+
+
+class ScheduleForm(forms.ModelForm):
+    day_list = forms.MultipleChoiceField(
+        label="Days", widget=forms.CheckboxSelectMultiple,
+        choices=list(enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])),
+    )
+    system_list = forms.MultipleChoiceField(
+        label="Systems", widget=forms.CheckboxSelectMultiple, choices=[(p, p) for p in PLATFORMS],
+    )
+
+    class Meta:
+        model = SyncSchedule
+        fields = ["enabled", "at"]
+        labels = {"enabled": "On", "at": "Time"}
+        widgets = {"at": forms.TimeInput(attrs={"type": "time"}, format="%H:%M")}
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("label_suffix", "")
+        super().__init__(*args, **kwargs)
+        self.fields["at"].help_text = f"In {settings.ATLAS_TIME_ZONE}."
+        self.initial["day_list"] = list(self.instance.days)
+        self.initial["system_list"] = self.instance.platforms or list(PLATFORMS)
+
+    def save(self, commit=True):
+        schedule = super().save(commit=False)
+        schedule.days = "".join(sorted(self.cleaned_data["day_list"]))
+        chosen = self.cleaned_data["system_list"]
+        schedule.systems = "" if set(chosen) == set(PLATFORMS) else ",".join(p for p in PLATFORMS if p in chosen)
+        schedule.last_queued = timezone.now()  # first run is the next time it comes round, not right now
+        schedule.save()
+        return schedule
+
+
+def _admin(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+
+@login_required
+def schedule_edit(request, pk=None):
+    _admin(request)
+    schedule = get_object_or_404(SyncSchedule, pk=pk) if pk else SyncSchedule(at="02:00")
+    form = ScheduleForm(request.POST or None, instance=schedule)
+    if request.method == "POST" and request.POST.get("delete") and pk:
+        schedule.delete()
+        messages.success(request, "Schedule deleted.")
+        return redirect("settings")
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Schedule saved.")
+        return redirect("settings")
+    return render(request, "reports/schedule_form.html", {"section": "settings", "form": form, "schedule": schedule})
+
+
+@login_required
+@require_POST
+def schedule_toggle(request, pk):
+    _admin(request)
+    schedule = get_object_or_404(SyncSchedule, pk=pk)
+    schedule.enabled = not schedule.enabled
+    if schedule.enabled:
+        schedule.last_queued = timezone.now()  # switching on does not start a run today if its time has passed
+    schedule.save()
+    return redirect("settings")

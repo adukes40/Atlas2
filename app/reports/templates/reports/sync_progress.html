@@ -1,0 +1,18 @@
+{# The running sync. atlas.js fetches this again every few seconds and reloads the page when the sync ends. #}
+{% if sync %}{% with run=sync.run current=sync.current %}
+<div class="sync-live{% if full %} full{% endif %}" data-sync-progress="{% url 'sync-progress' %}{% if full %}?full=1{% endif %}" role="status">
+  <div class="sync-line">
+    <span>{% if run.cancelled_by %}<b>Cancelling…</b> stops at the next safe point
+      {% elif run.state == 'requested' %}<b>Sync waiting to start</b>
+      {% elif current %}<b>Syncing {{ current.name }}</b>{% if full %} · step {{ sync.number }} of {{ sync.steps|length }}{% endif %} · {{ current.detail }}
+      {% else %}<b>Syncing</b>{% endif %}</span>
+    {% if not full %}<span class="sbar" aria-hidden="true"><i style="width:{{ sync.percent }}%"></i></span>{% endif %}
+    {% if not run.cancelled_by %}<form method="post" action="{% url 'sync-cancel' run.pk %}">{% csrf_token %}<button class="btn quiet sm" type="submit">Cancel sync</button></form>{% endif %}
+  </div>
+  {% if full and sync.steps %}<div class="steps">
+    {% for step in sync.steps %}<div class="step {{ step.state }}"><span>{{ step.name }}</span>
+      <span class="sbar{% if step.state == 'running' and not step.known %} unknown{% endif %}" aria-hidden="true"><i style="width:{{ step.percent }}%"></i></span>
+      <span class="muted">{{ step.detail }}</span></div>
+    {% endfor %}</div>{% endif %}
+</div>
+{% endwith %}{% else %}<div data-sync-done></div>{% endif %}

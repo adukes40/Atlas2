@@ -13,8 +13,8 @@ from django.views.decorators.http import require_POST
 
 from .context import MODE_COOKIE, MODES
 from .forms import OrganizationForm, UserForm
-from reports.models import SyncRun
-from reports.views import platform_times as reports_platforms
+from reports.models import SyncRun, SyncSchedule
+from reports.views import platform_times as reports_platforms, sync_status
 from sso.models import ClassLinkConfig
 
 from .models import Organization
@@ -49,7 +49,8 @@ def settings_page(request):
     classlink_on = ClassLinkConfig.load().ready
     return render(
         request, "core/settings.html",
-        {"section": "settings", "form": form, "active_users": users, "waiting_users": waiting, "classlink_on": classlink_on},
+        {"section": "settings", "form": form, "active_users": users, "waiting_users": waiting, "classlink_on": classlink_on,
+         "schedules": SyncSchedule.objects.all(), "sync_tz": settings.ATLAS_TIME_ZONE},
     )
 
 
@@ -111,6 +112,7 @@ def system(request):
             "sync_runs": SyncRun.objects.all()[:5],
             "sync_tz": settings.ATLAS_TIME_ZONE,
             "platforms": reports_platforms(),
+            "sync": sync_status(),
         },
     )
 

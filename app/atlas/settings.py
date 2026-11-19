@@ -116,7 +116,8 @@ LOGOUT_REDIRECT_URL = "login"
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
-# The nightly sync for Reports runs at this hour in this time zone.
+# Sync schedules (Settings) run in this time zone. ATLAS_SYNC_HOUR only sets
+# the first schedule, the first time Atlas starts with schedules.
 ATLAS_TIME_ZONE = os.environ.get("ATLAS_TIME_ZONE", "America/New_York")
 ATLAS_SYNC_HOUR = int(os.environ.get("ATLAS_SYNC_HOUR", "2"))
 USE_I18N = False
