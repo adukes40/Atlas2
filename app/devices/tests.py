@@ -1,6 +1,8 @@
 import json
 
 import requests
+from datetime import timedelta
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from core.models import Organization
 from django.test import TestCase, override_settings
@@ -464,7 +466,9 @@ class PersonTests(TestCase):
         CopiedPerson.objects.create(user_id="u-1", name="Jordan Sample", email="jsample@students.example",
                                     school_id="204817", role="Student", active=True)
         CopiedPerson.objects.create(user_id="u-9", name="Jamie Park", email="jpark@students.example", role="Student")
-        CopiedDevice.objects.create(serial="OTHER1", asset_tag="103991", in_iiq=True, owner_id="u-9")
+        CopiedDevice.objects.create(serial="OTHER1", asset_tag="103991", in_iiq=True, owner_id="u-9",
+                                    model="Dell Chromebook 3110", recent_user="jsample@students.example",
+                                    last_sync=timezone.now() - timedelta(days=5))
 
     def routes(self):
         google = json.dumps([{"LastLoginDate": "2026-11-18", "OrgUnitPath": "/Students/North"}])
@@ -485,19 +489,13 @@ class PersonTests(TestCase):
         }
 
     def others(self):
-        usage = f"{BASE}/apps/googleDeviceData/api/googleDeviceData/data/assets/usage/u-1/30"
-        return {usage: FakeResponse(data={"Items": [
-            {"AssetTag": "103991 | Jamie Park | North", "SerialNumber": "OTHER1", "Model": "Dell Chromebook 3110",
-             "UsageHistory": [{"UserId": "u-1", "Username": "jsample@students.example",
-                               "StartDate": "2026-11-03T08:00:00Z", "EndDate": "2026-11-03T09:00:00Z"},
-                              {"UserId": "u-9", "Username": "jpark@students.example", "StartDate": "2026-11-18T08:00:00Z"}]},
-        ]})}
+        return {}
 
     def test_a_person_page_gathers_devices_tickets_and_classes(self):
         with incident_iq(self.routes(), others=self.others()):
             page = self.client.get(reverse("person360", args=["u-1"]))
         for expected in ("Jordan Sample", "Homeroom B214", "/Students/North", "Nov 18, 2026", "Theirs", "Jamie Park&#x27;s",
-                         "Was theirs", "Signed in to 103991 on Nov 3, which is assigned to Jamie Park.", "6 all time",
+                         "Was theirs", "Signed in to 103991 on ", "6 all time",
                          "Cracked screen", "Math 7"):
             self.assertContains(page, expected)
 

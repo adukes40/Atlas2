@@ -114,6 +114,8 @@ class IncidentIQClient:
             data = response.json()
         except ValueError:
             raise BadResponse("Incident IQ sent back something that is not data. Check the site address.") from None
+        if isinstance(data, list):
+            data = {"Items": data}  # Incident IQ's add-on apps answer some calls with a bare list
         if not isinstance(data, dict):
             raise BadResponse("Incident IQ sent back data in a shape Atlas does not understand.")
         return data
@@ -176,11 +178,6 @@ class IncidentIQClient:
 
     def device_history(self, user_id):
         return self._request("GET", f"/users/{quote(user_id, safe='')}/device-history").get("Items") or []
-
-    def devices_used(self, user_id, days=30):
-        """Chromebooks this person signed in to, from Incident IQ's Google Device Data app."""
-        data = self._request("GET", f"/apps/googleDeviceData/api/googleDeviceData/data/assets/usage/{quote(user_id, safe='')}/{days}")
-        return data.get("Items") or []
 
     def ticket_stats(self, user_id):
         data = self._request("GET", f"/analytics/requestor/{quote(user_id, safe='')}/summary-stats")

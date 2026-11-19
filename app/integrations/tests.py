@@ -102,7 +102,7 @@ class ClientTests(SimpleTestCase):
             ({"/assets": FakeResponse(status=404)}, None, BadResponse),
             ({"/assets": FakeResponse(status=500)}, None, BadResponse),
             ({"/assets": FakeResponse(text="<html>Sign in</html>")}, None, BadResponse),
-            ({"/assets": FakeResponse(data=["not", "an", "object"])}, None, BadResponse),
+            ({"/assets": FakeResponse(data="not an object")}, None, BadResponse),
             (None, requests.Timeout(), Unreachable),
             (None, requests.ConnectionError(), Unreachable),
         ]

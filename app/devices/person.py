@@ -3,7 +3,7 @@ separately; a part that fails is left out with a note, never sinks the page."""
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from django.db.models import Q
 
@@ -152,14 +152,13 @@ def person360(user_id):
         if item.get("SerialNumber") and not item.get("IsAssetDeleted"):
             row(str(item["SerialNumber"]), asset_id=str(item.get("AssetId") or ""), tag=str(item.get("AssetTag") or ""),
                 model=str(item.get("ModelName") or ""), assigned=_when(item.get("AssignedDateUtc")))
-    email = result.person.email.lower()
-    for item in _part(result, "Chromebook sign-ins", lambda: client.devices_used(user_id)) or []:
-        mine = [u for u in item.get("UsageHistory") or []
-                if isinstance(u, dict) and (u.get("UserId") == user_id or str(u.get("Username") or "").lower() == email)]
-        stamps = [t for t in (_when(u.get("EndDate")) or _when(u.get("StartDate")) for u in mine) if t]
-        if item.get("SerialNumber") and stamps:
-            tag = str(item.get("AssetTag") or "").split(" | ")[0]  # some districts annotate "tag | name | school"
-            row(str(item["SerialNumber"]), tag=tag, model=str(item.get("Model") or ""), last_signed_in=max(stamps))
+    # Chromebooks Google last saw them sign in to, from the nightly copy. Incident IQ's
+    # per-person sign-in list needs a signed-in IIQ user, which an API token is not.
+    email = result.person.email
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+    if email:
+        for copied in CopiedDevice.objects.filter(recent_user__iexact=email, last_sync__gte=since):
+            row(copied.serial, tag=copied.asset_tag, model=copied.model or copied.google_model, last_signed_in=copied.last_sync)
 
     # Who has the devices that are not theirs, from the nightly copy.
     others = [d.serial.upper() for d in rows.values() if not d.current]
