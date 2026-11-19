@@ -278,6 +278,11 @@ class Report:
     sort: str = ""
     group_by: str = ""
     note: str = ""  # shown under the question: what to know about the data
+    needs: tuple = ()  # systems it reads, each must be connected; "Mist or Meraki" means either
+
+    def shown(self, connected):
+        """Whether the report has anything to show with these systems connected."""
+        return all(any(s in connected for s in need.split(" or ")) for need in self.needs)
 
     @property
     def fields(self):
@@ -331,6 +336,7 @@ REPORTS = [
         "Assigned Chromebooks Google hasn't heard from in 30 days or more, with who Incident IQ says has them.",
         "devices", ("last_sync.older.30", "owner__name.set."),
         DEVICE_COLUMNS + ("owner__grade", "last_sync", "last_on_network", "owner__fee_balance"), "last_sync",
+        needs=("Google",),
     ),
     Report(
         "lost-but-online", "Lost but still online", G["where"],
@@ -338,18 +344,21 @@ REPORTS = [
         "devices", ("iiq_status.has.lost, stolen, missing, retired, dispos", "last_seen_anywhere.within.7"),
         DEVICE_COLUMNS + ("iiq_status", "last_sync", "last_on_network", "network_place", "recent_user"), "-last_seen_anywhere",
         note="Status names are matched by the words in the first filter. Change them if yours differ.",
+        needs=("Google or Mist",),
     ),
     Report(
         "disabled-but-assigned", "Disabled but still assigned", G["where"],
         "Chromebooks disabled or deprovisioned in Google that someone still has in Incident IQ.",
         "devices", ("google_status.is.Disabled, Deprovisioned", "owner__name.set."),
         DEVICE_COLUMNS + ("google_status", "org_unit", "last_sync"), "owner__school",
+        needs=("Google",),
     ),
     Report(
         "signed-in-by-other", "Signed in by someone else", G["who"],
         "Chromebooks whose last Google sign-in is not the person Incident IQ has them assigned to.",
         "devices", ("signed_in_by_other.yes.",),
         DEVICE_COLUMNS + ("owner__email", "recent_user", "last_sync"), "-last_sync",
+        needs=("Google",),
     ),
     Report(
         "more-than-one", "People with more than one Chromebook", G["who"],
@@ -381,6 +390,7 @@ REPORTS = [
         "devices", ("updates_until.before.365",),
         ("asset_tag", "serial", "google_model", "updates_until", "owner__school", "org_unit", "google_status"), "updates_until",
         group_by="google_model",
+        needs=("Google",),
     ),
     Report(
         "fleet", "Fleet overview", G["life"],
@@ -388,12 +398,14 @@ REPORTS = [
         "devices", ("in_google.yes.",),
         ("asset_tag", "serial", "google_model", "google_status", "org_unit", "owner__school"), "google_model",
         group_by="google_model",
+        needs=("Google",),
     ),
     Report(
         "old-chromeos", "Out-of-date ChromeOS", G["life"],
         "Chromebooks three or more versions behind the newest ChromeOS in the fleet.",
         "devices", ("os_behind.gt.2", "google_status.is.Active"),
         DEVICE_COLUMNS + ("os_version", "os_behind", "updates_until", "last_sync"), "-os_behind",
+        needs=("Google",),
     ),
     Report(
         "wrong-network", "Wrong network or policy", G["network"],
@@ -401,6 +413,7 @@ REPORTS = [
         "devices", ("org_unit.has.student", "network_policy.has.staff", "last_on_network.within.7"),
         DEVICE_COLUMNS + ("org_unit", "ssid", "network_policy", "vlan", "network_place", "last_on_network"), "network_place",
         note="Matched by the words \"student\" in the Google OU and \"staff\" in the Mist policy. Change them to fit your names.",
+        needs=("Google", "Mist"),
     ),
     Report(
         "on-wifi-by-school", "On Wi-Fi at each school", G["network"],
@@ -408,6 +421,7 @@ REPORTS = [
         "devices", ("last_on_network.within.1",),
         DEVICE_COLUMNS + ("network_place", "ssid", "last_on_network"), "network_place",
         group_by="network_place",
+        needs=("Mist",),
     ),
     Report(
         "access-points", "Access points", G["gear"],
@@ -416,18 +430,21 @@ REPORTS = [
         ("name", "vendor", "model", "status", "clients", "site", "uplink_switch", "uplink_port", "port_mode",
          "port_vlan", "poe_draw", "firmware"), "name",
         note="The switch port comes from Meraki's neighbor list, or from what a Mist access point reports when the switch isn't a Meraki one.",
+        needs=("Mist or Meraki",),
     ),
     Report(
         "aps-offline", "Access points offline", G["gear"],
         "Access points Mist or Meraki doesn't have online, and where they plug in.",
         "gear", ("kind.is.Access point", "status.not.Online"),
         ("name", "vendor", "model", "status", "site", "last_seen", "uplink_switch", "uplink_port"), "site",
+        needs=("Mist or Meraki",),
     ),
     Report(
         "switches", "Switches", G["gear"],
         "Every Meraki switch, how many of its ports are up, and its firmware. Click a switch to see its ports.",
         "gear", ("kind.is.Switch",),
         ("name", "model", "site", "status", "ip", "ports_up", "ports_total", "firmware"), "name",
+        needs=("Meraki",),
     ),
     Report(
         "switch-ports", "Switch ports", G["gear"],
@@ -435,6 +452,7 @@ REPORTS = [
         "ports", (),
         ("switch_name", "port_id", "name", "link", "speed", "mode", "vlan", "allowed_vlans", "poe", "neighbor",
          "neighbor_kind"), "switch_name",
+        needs=("Meraki",),
     ),
     Report(
         "plugged-in", "Devices on switch ports", G["gear"],
@@ -444,12 +462,14 @@ REPORTS = [
          "poe_in_use"), "switch_name",
         group_by="neighbor_kind",
         note="Read from what each device announces on the port (LLDP or CDP). A device that announces nothing isn't listed.",
+        needs=("Meraki",),
     ),
     Report(
         "port-errors", "Ports with errors", G["gear"],
         "Switch ports Meraki reports errors or warnings on, such as CRC errors or PoE over budget.",
         "ports", ("problems.set.",),
         ("switch_name", "port_id", "problems", "link", "speed", "neighbor", "neighbor_kind"), "switch_name",
+        needs=("Meraki",),
     ),
     Report(
         "firmware", "Firmware versions", G["gear"],
@@ -457,18 +477,21 @@ REPORTS = [
         "gear", (),
         ("name", "kind", "vendor", "model", "site", "firmware", "status"), "firmware",
         group_by="firmware",
+        needs=("Mist or Meraki",),
     ),
     Report(
         "wireless-networks", "Wireless networks", G["gear"],
         "Every Mist wireless network: on or off, how it signs people in, its VLAN and bands.",
         "wlans", (),
         ("ssid", "enabled", "security", "vlan", "bands", "scope", "psks"), "ssid",
+        needs=("Mist",),
     ),
     Report(
         "personal-keys", "Personal Wi-Fi keys", G["gear"],
         "Who has a Mist personal key, for which network, with which role. The keys themselves are not copied.",
         "psks", (),
         ("name", "ssid", "role", "vlan", "expires"), "ssid",
+        needs=("Mist",),
     ),
     Report(
         "lookups", "Lookup activity", G["atlas"],
@@ -480,10 +503,12 @@ REPORTS = [
 BY_SLUG = {r.slug: r for r in REPORTS}
 
 
-def library():
-    """Reports in their groups, in order."""
+def library(connected):
+    """The reports these connected systems can fill, in their groups, in order."""
     groups = {}
     for report in REPORTS:
+        if not report.shown(connected):
+            continue
         groups.setdefault(report.group, []).append(report)
     return list(groups.items())
 

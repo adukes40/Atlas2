@@ -158,6 +158,17 @@ class SyncTests(TestCase):
         for slug, count in expected.items():
             self.assertEqual(catalog.count(BY_SLUG[slug]), count, slug)
 
+    def test_without_google_chromebooks_are_counted_from_incident_iq(self):
+        GoogleConfig.objects.all().delete()
+        MistConfig.objects.all().delete()
+        routes = {**IIQ_ROUTES, "/assets": page(asset(), asset(
+            AssetId="a-2", AssetTag="L-2", SerialNumber="LAPTOP1", Owner={"UserId": "u-3"},
+            Model={"Name": "Laptop 14", "Category": {"Name": "Laptop"}}))}
+        self.assertEqual(sync(routes).state, SyncRun.DONE)
+        self.assertEqual(Person.objects.get(user_id="u-1").chromebooks, 1)
+        self.assertEqual(Person.objects.get(user_id="u-3").chromebooks, 0)
+        self.assertEqual(catalog.count(BY_SLUG["no-chromebook"]), 1)  # u-3, who has only a laptop
+
     def test_a_google_failure_keeps_yesterdays_copy(self):
         sync()
         run = sync(google=FakeResponse(status=403))
@@ -281,11 +292,23 @@ class PageTests(TestCase):
         self.assertEqual(self.client.get(reverse("reports")).status_code, 302)
         self.assertEqual(self.client.get(reverse("report", args=["fleet"])).status_code, 302)
 
-    def test_the_overview_shows_every_report_with_its_count(self):
+    def test_the_overview_shows_every_report_the_connected_systems_can_fill(self):
         page = self.client.get(reverse("reports"))
         for report in REPORTS:
-            self.assertContains(page, report.title)
+            if "Meraki" in report.needs:
+                self.assertNotContains(page, report.title)
+            else:
+                self.assertContains(page, report.title)
         self.assertContains(page, "Data as of")
+
+    def test_with_only_incident_iq_the_google_and_network_reports_are_hidden(self):
+        GoogleConfig.objects.all().delete()
+        MistConfig.objects.all().delete()
+        page = self.client.get(reverse("reports"))
+        self.assertContains(page, "Fee balances")
+        self.assertNotContains(page, "Fleet overview")
+        self.assertNotContains(page, "Access points")
+        self.assertNotContains(page, 'value="Google"')  # nor offered in Sync now
 
     def test_every_report_page_opens(self):
         for report in REPORTS:
@@ -348,8 +371,8 @@ class PageTests(TestCase):
 
     def test_sync_now_queues_a_run(self):
         page = self.client.get(reverse("reports"))
-        self.assertContains(page, 'name="platform" value="Meraki"')
-        self.assertContains(page, "Meraki <small>last never</small>")
+        self.assertContains(page, "Mist <small>last ")
+        self.assertNotContains(page, 'name="platform" value="Meraki"')  # not set up, so not offered
         self.client.post(reverse("sync-now"), {"next": reverse("reports")}, follow=True)
         self.assertFalse(SyncRun.objects.filter(state=SyncRun.REQUESTED).exists())  # nothing ticked
         self.client.post(reverse("sync-now"), {"next": reverse("reports"), "platform": ["Meraki", "Nope"]})

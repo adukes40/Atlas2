@@ -37,13 +37,10 @@
     <div class="cell"><small><i></i>Last seen</small><b>{{ seen.last_seen_ago|default:"Unknown" }}</b><span>{{ seen.source }}{% if seen.place %}, {{ seen.place }}{% endif %}</span></div>
     {% elif result.network_connected %}
     <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Not seen on the network</span></div>
-    {% else %}
-    <div class="cell off"><small><i></i>Last seen</small><b>&mdash;</b><span>Needs Mist or Meraki</span></div>
     {% endif %}
     {% if book %}
     <div class="cell{% if not book.active %} at{% endif %}"><small><i></i>Google</small><b>{{ book.status|default:"Unknown" }}</b><span>{% if book.last_sync %}Synced {{ book.last_sync_ago }}{% else %}Never synced{% endif %}</span></div>
     {% elif result.google.state == "not_connected" %}
-    <div class="cell off"><small><i></i>Google</small><b>&mdash;</b><span>Not connected yet</span></div>
     {% elif result.google.state == "error" %}
     <div class="cell at"><small><i></i>Google</small><b>No answer</b><span>See the state card</span></div>
     {% else %}
@@ -116,12 +113,10 @@
     {% if part.state == "error" %}<p class="warn">{{ part.name }}: {{ part.message }}</p>
     {% elif part.state == "not_found" %}<p class="note">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
     {% endfor %}
-    {% if not result.network_connected %}
-    <p class="note">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>
-    {% endif %}
     {% if device.location %}<p class="note">Incident IQ lists it at {{ device.location }}.</p>{% endif %}
   </section>
 
+  {% if result.google.state != "not_connected" %}
   <section class="card">
     <div class="card-head"><h2>What state it's in</h2><span class="src">Google</span></div>
     {% if book %}
@@ -145,10 +140,9 @@
     <p class="warn">{{ result.google.message }}</p>
     {% elif result.google.state == "not_found" %}
     <p class="muted">Google Workspace has no Chromebook with serial <span class="mono">{{ device.serial }}</span>.</p>
-    {% else %}
-    <p class="muted">ChromeOS, OU, update dates and recent sign-ins will show here once Google Workspace is connected.</p>
     {% endif %}
   </section>
+  {% endif %}
 </div>
 
 {% if device.fees.owed or device.open_tickets or result.switch_sighting or seen.wireless %}

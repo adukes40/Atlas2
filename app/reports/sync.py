@@ -47,6 +47,14 @@ PLATFORMS = {  # each platform and the sync steps it runs
 }
 
 
+CONFIGS = {"Google": GoogleConfig, "Incident IQ": IncidentIQConfig, "Mist": MistConfig, "Meraki": MerakiConfig}
+
+
+def connected():
+    """The platforms set up in Settings."""
+    return {name for name, config in CONFIGS.items() if config.load().configured}
+
+
 def request_sync(who, platforms=()):
     """Queue a sync of these platforms (all when none are named). A sync
     already waiting to start takes them on instead. Returns the run."""
@@ -424,7 +432,8 @@ def _finish(devices, persons, google_on):
         device.off_network = None if on is None else not on
         if owner:
             owner.devices += 1
-            owner.chromebooks += device.in_google
+            # Without Google, Incident IQ's model or category is the only way to tell.
+            owner.chromebooks += device.in_google if google_on else _looks_chromebook(device)
             owner.device_tags = _cut_tags(owner.device_tags, device.key)
 
     with transaction.atomic():
@@ -445,12 +454,15 @@ def _cut_tags(tags, tag):
     return joined if len(joined) <= 300 else tags
 
 
+def _looks_chromebook(device):
+    return "chromebook" in f"{device.model} {device.category}".lower()
+
+
 def _mismatches(device, google_on):
     found = []
     if device.in_google and not device.in_iiq:
         found.append("Not in Incident IQ")
-    looks_chromebook = "chromebook" in f"{device.model} {device.category}".lower()
-    if google_on and device.in_iiq and not device.in_google and looks_chromebook:
+    if google_on and device.in_iiq and not device.in_google and _looks_chromebook(device):
         found.append("Not in Google")
     if device.in_iiq and device.in_google and device.google_asset_id and device.asset_tag \
             and device.google_asset_id.lower() != device.asset_tag.lower():

@@ -316,9 +316,10 @@ class GoogleAndNetworkTests(TestCase):
 
     def test_nothing_else_connected_reads_as_before(self):
         page = self.look_up()
-        self.assertContains(page, "Needs Mist or Meraki", count=1)
-        self.assertContains(page, "Not connected yet")
-        self.assertContains(page, "once Google Workspace is connected")
+        self.assertContains(page, "Jordan Sample")
+        self.assertNotContains(page, "Last seen")  # systems not set up are left out, not shown empty
+        self.assertNotContains(page, "What state it")
+        self.assertNotContains(page, "Not connected yet")
 
     def test_everything_connected_fills_every_card(self):
         self.connect()

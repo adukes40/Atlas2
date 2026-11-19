@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from .catalog import BY_SLUG, OPS, REPORTS, grouped, library, parse_filter, query
 from .models import DailyCount, NetDevice, SavedReport, SwitchPort, SyncRun
-from .sync import PLATFORMS, as_of, request_sync, sync_zone
+from .sync import PLATFORMS, as_of, connected, request_sync, sync_zone
 
 PAGE_SIZE = 100
 
@@ -41,7 +41,8 @@ def _n(number):
 def platform_times(when=None):
     """Each platform with when its data was last copied, for the Sync now menu."""
     when = as_of() if when is None else when
-    return [(p, _stamp(when[p]) if p in when else "never") for p in PLATFORMS]
+    on = connected()
+    return [(p, _stamp(when[p]) if p in when else "never") for p in PLATFORMS if p in on]
 
 
 def _shared(request, current=""):
@@ -50,7 +51,7 @@ def _shared(request, current=""):
     newest = SyncRun.objects.exclude(state=SyncRun.REQUESTED).first()
     return {
         "section": "reports",
-        "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library()],
+        "library": [(group, [(r, _n(counts.get(r.slug))) for r in reports]) for group, reports in library(connected())],
         "saved": SavedReport.objects.filter(user=request.user),
         "current": current,
         # The oldest platform's copy, so "as of" never claims fresher data than a report shows.

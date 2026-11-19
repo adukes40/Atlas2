@@ -46,7 +46,7 @@ class Person(models.Model):
     active = models.BooleanField(default=True)
     fee_balance = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     fee_past_due = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    chromebooks = models.IntegerField(default=0)  # assigned devices that Google also has
+    chromebooks = models.IntegerField(default=0)  # assigned devices Google also has; by IIQ model or category without Google
     devices = models.IntegerField(default=0)  # every assigned asset
     device_tags = models.CharField(max_length=300, blank=True)
 
