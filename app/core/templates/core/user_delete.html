@@ -1,0 +1,17 @@
+{% extends "core/base.html" %}
+{% block title %}Delete {{ person.get_username }}{% endblock %}
+{% block content %}
+<div>
+  <p class="muted"><a href="{% url 'settings' %}">Settings</a> / <a href="{% url 'users' %}">Users</a></p>
+  <h1>Delete {{ person.get_username }}?</h1>
+</div>
+<section class="card narrow">
+  <p>{{ person.get_full_name|default:person.get_username }} will be removed from Atlas and can no longer sign in. Their lookup history stays in Lookup activity under their username. Their saved reports are removed.</p>
+  <p class="hint">If they sign in with ClassLink again, Atlas asks for a new account that waits for your approval. To stop someone for now, turn off “Can sign in” instead.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button class="btn" type="submit">Delete user</button>
+    <a class="btn quiet" href="{% url 'user-edit' person.pk %}">Cancel</a>
+  </form>
+</section>
+{% endblock %}

@@ -217,3 +217,35 @@ class WanIpTests(TestCase):
         bad = self.client.post(reverse("settings"), {"name": "Example Schools", "theme": "graphite", "wan_ips": "school wifi"})
         self.assertContains(bad, "is not an address or the start of one")
         self.assertEqual(Organization.load().wan_ips, "203.0.113.9\n192.0.2.0/24")
+
+
+class DeleteUserTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("admin")
+        self.tech = User.objects.create_user("tech")
+        self.client.force_login(self.admin)
+
+    def test_delete_keeps_lookup_history_under_their_username(self):
+        from devices.models import LookupLog
+
+        self.client.force_login(self.tech)
+        self.client.get(reverse("device360"), {"q": "104482"})
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("user-delete", args=[self.tech.pk])), "lookup history stays")
+        response = self.client.post(reverse("user-delete", args=[self.tech.pk]))
+        self.assertRedirects(response, reverse("users"))
+        self.assertFalse(User.objects.filter(username="tech").exists())
+        entry = LookupLog.objects.get()
+        self.assertIsNone(entry.user)
+        self.assertEqual(entry.username, "tech")
+        self.assertContains(self.client.get(reverse("report", args=["lookups"])), "tech")
+
+    def test_cannot_delete_yourself(self):
+        self.client.post(reverse("user-delete", args=[self.admin.pk]))
+        self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
+        self.assertNotContains(self.client.get(reverse("user-edit", args=[self.admin.pk])), "Delete user")
+
+    def test_technicians_cannot_delete(self):
+        self.client.force_login(self.tech)
+        self.assertEqual(self.client.post(reverse("user-delete", args=[self.admin.pk])).status_code, 403)
+        self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())

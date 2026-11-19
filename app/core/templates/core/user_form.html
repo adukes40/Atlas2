@@ -17,6 +17,7 @@
     </div>
     {% endfor %}
     <button class="btn" type="submit">Save</button>
+    {% if person and person.pk != user.pk %}<a class="btn quiet" href="{% url 'user-delete' person.pk %}">Delete user</a>{% endif %}
   </form>
 </section>
 {% endblock %}

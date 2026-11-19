@@ -22,6 +22,7 @@ def device360(request):
         device = result.device
         LookupLog.objects.create(
             user=request.user,
+            username=request.user.get_username(),
             query=query,
             found=bool(result.devices),
             key=device.key if device else "",
