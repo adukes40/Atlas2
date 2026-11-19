@@ -82,7 +82,8 @@ class IncidentIQClient:
         try:
             response = self._session.request(
                 method,
-                f"{self.base_url}{API}{path}",
+                # Incident IQ's add-on apps (Google Device Data, ...) live outside /api/v1.0.
+                f"{self.base_url}{'' if path.startswith('/apps/') else API}{path}",
                 headers=self._headers(),
                 timeout=self.timeout,
                 **kwargs,
@@ -160,6 +161,13 @@ class IncidentIQClient:
 
     def user(self, user_id):
         return self._request("GET", f"/users/{quote(user_id, safe='')}")
+
+    def google_device(self, asset_id):
+        """Google's record of one Chromebook, as Incident IQ's Google Device Data
+        app keeps it (the call its own asset page makes). Not in the public API docs."""
+        return self._request(
+            "POST", "/apps/googleDeviceData/api/googleDeviceData/data/assets/get-google-device", json={"AssetId": asset_id}
+        )
 
     def open_tickets(self, asset_id, user_id):
         """Open tickets on one asset (at most 50 of its person's tickets are read).

@@ -9,6 +9,7 @@ from django.urls import reverse
 from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
 from integrations.testing import (
     BASE,
+    WIFI_MAC,
     GOOGLE_ADMIN,
     GOOGLE_DEVICES_URL,
     GOOGLE_KEY,
@@ -323,6 +324,18 @@ class GoogleAndNetworkTests(TestCase):
         self.assertContains(page, "Google, via Incident IQ")
         self.assertContains(page, "/Students/North")
         self.assertContains(page, "the last sign-in Google saw was friend@students.example")
+
+    def test_without_google_the_mac_from_incident_iqs_google_app_finds_it_on_the_network(self):
+        self.connect(google=False)
+        app = {"CustomFields": {"MacAddress": WIFI_MAC, "OsVersion": "142.0.7444.100", "DeviceId": "g-device-1",
+                                "LastSync": "2026-11-12 14:05:00Z", "OrgUnitPath": "/Students/North Middle",
+                                "Status": "ACTIVE", "AutoUpdateExpiration": "2031-06-01",
+                                "RecentUsers": json.dumps([{"email": "jsample@students.example"}])}}
+        url = f"{BASE}/apps/googleDeviceData/api/googleDeviceData/data/assets/get-google-device"
+        page = self.look_up(others={**STANDARD_OTHERS, url: FakeResponse(data=app)})
+        for expected in ("Google, via Incident IQ", "142.0.7444.100", "NMS-AP-214",
+                         "https://admin.google.com/ac/chrome/devices/g-device-1"):
+            self.assertContains(page, expected)
 
     def test_nothing_else_connected_reads_as_before(self):
         page = self.look_up()

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from integrations.errors import IntegrationError
 from integrations.google.normalize import Chromebook, normalize_chromebook
 from integrations.incidentiq.client import IncidentIQError
-from integrations.incidentiq.normalize import Device, google_device, normalize_asset, normalize_ticket, normalize_user_fees
+from integrations.incidentiq.normalize import Device, google_device, google_device_from_app, normalize_asset, normalize_ticket, normalize_user_fees
 from integrations.meraki import normalize as meraki_normalize
 from integrations.mist import normalize as mist_normalize
 from integrations.models import GoogleConfig, IncidentIQConfig, IncidentIQLocation, MerakiConfig, MistConfig
@@ -131,7 +131,7 @@ def lookup(query):
         _add_tickets(client, result.device, result)
         _add_google(result)
         if not GoogleConfig.load().configured:
-            _add_google_from_iiq(result, raw_assets[0])
+            _add_google_from_iiq(client, result, raw_assets[0])
         _add_network(result)
         _add_connection(result)
     result.took_ms = int((time.monotonic() - started) * 1000)
@@ -186,9 +186,15 @@ def _add_google(result):
         result.chromebook = normalize_chromebook(raw)
 
 
-def _add_google_from_iiq(result, raw):
-    """What Incident IQ's own Google sync recorded, when Atlas has no Google key."""
-    book = google_device(raw)
+def _add_google_from_iiq(client, result, raw):
+    """What Incident IQ's own Google sync recorded, when Atlas has no Google key:
+    the full record from its Google Device Data app (with the MAC addresses Mist
+    and Meraki need), else the shorter copy it keeps in a custom field."""
+    try:
+        book = google_device_from_app(client.google_device(result.device.asset_id))
+    except IncidentIQError:
+        book = None  # the app is not installed, or not open to this token
+    book = book or google_device(raw)
     if book:
         result.google.state, result.google_source = FOUND, "Google, via Incident IQ"
         result.chromebook = normalize_chromebook(book)

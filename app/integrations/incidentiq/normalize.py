@@ -253,3 +253,21 @@ def google_device(raw):
             "recentUsers": [{"email": email}] if email else [],
         }
     return None
+
+
+def google_device_from_app(raw):
+    """The Google Device Data app's answer, in the shape Google's own API uses,
+    or None. Its CustomFields are Google's fields with the first letter capitalized."""
+    fields = raw.get("CustomFields") if isinstance(raw.get("CustomFields"), dict) else None
+    if not fields:
+        return None
+    book = {key[:1].lower() + key[1:]: value for key, value in fields.items() if value not in (None, "")}
+    try:
+        users = json.loads(fields.get("RecentUsers") or "[]")
+    except (TypeError, ValueError):
+        users = []
+    book["recentUsers"] = users if isinstance(users, list) else []
+    book["autoUpdateThrough"] = _text(fields.get("AutoUpdateExpiration"))[:10]
+    book["lastKnownNetwork"] = [{"ipAddress": _text(fields.get("LastKnownIpAddress")),
+                                 "wanIpAddress": _text(fields.get("LastKnownWanIpAddress"))}]
+    return book
