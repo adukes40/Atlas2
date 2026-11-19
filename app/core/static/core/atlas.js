@@ -25,3 +25,24 @@
     button.title = "Switch to light mode";
   }
 })();
+
+// A running sync: fetch its progress every few seconds; reload when it ends
+// so the page shows the new data.
+(function () {
+  function poll() {
+    var live = document.querySelector("[data-sync-progress]");
+    if (!live) return;
+    fetch(live.getAttribute("data-sync-progress"), { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+      .then(function (html) {
+        var box = document.createElement("div");
+        box.innerHTML = html.trim();
+        var next = box.firstElementChild;
+        if (!next || next.hasAttribute("data-sync-done")) return location.reload();
+        live.replaceWith(next);
+        setTimeout(poll, 3000);
+      })
+      .catch(function () { setTimeout(poll, 10000); });
+  }
+  setTimeout(poll, 3000);
+})();

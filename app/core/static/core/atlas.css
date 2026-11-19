@@ -230,3 +230,39 @@ dl { margin: 0; }
   .lib { max-width: none; order: 2; }  /* the report first, the list of reports under it */
   .session { padding: 0 0 4px; border-top: 0; }
 }
+
+/* Sync progress and schedules */
+.sync-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sync-line b { color: var(--ink); }
+.asof .sync-live, .asof .sync-line { display: contents; }
+.asof .sbar { flex-basis: 120px; min-width: 80px; }
+.rep-top .asof { flex: 1 1 auto; justify-content: flex-end; }
+.sbar { display: block; flex: 0 1 200px; min-width: 120px; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.sbar i { display: block; height: 100%; background: var(--focus); border-radius: 99px; transition: width .6s; }
+.sbar.unknown i { width: 30% !important; animation: sbar 1.4s ease-in-out infinite alternate; }
+@keyframes sbar { from { margin-left: 0; } to { margin-left: 70%; } }
+@media (prefers-reduced-motion: reduce) { .sbar.unknown i { animation: none; margin-left: 35%; } }
+.sync-live.full { margin-bottom: 12px; }
+.steps { display: grid; gap: 10px; margin-top: 12px; }
+.step { display: grid; grid-template-columns: minmax(100px, 150px) minmax(80px, 1fr) minmax(120px, 220px); gap: 12px; align-items: center; font-size: 14px; }
+.step .sbar { flex: none; min-width: 0; }
+.step.done .sbar i { background: var(--ok); }
+.step.failed .sbar i { background: var(--warn); }
+.step.running > span:first-child { font-weight: 700; }
+.step.waiting > span:first-child { color: var(--ink2); }
+.step .muted { font-size: 13px; }
+.card.wide { grid-column: 1 / -1; }
+.sched { display: grid; grid-template-columns: auto 90px minmax(0, 1fr) auto; gap: 12px; align-items: center; max-width: 720px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.sched.off > b, .sched.off > div { color: var(--ink2); }
+.toggle { display: block; width: 44px; height: 24px; padding: 0; border: 0; border-radius: 99px; background: var(--line); position: relative; cursor: pointer; }
+.toggle::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+.toggle[aria-checked="true"] { background: var(--ok); }
+.toggle[aria-checked="true"]::after { left: 23px; }
+.days { display: flex; gap: 4px; margin-top: 6px; }
+.days span { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--ink2); }
+.days span.on { background: var(--focus); border-color: var(--focus); color: var(--btn-ink); }
+fieldset.tickrow { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+fieldset.tickrow legend { font-size: 13px; font-weight: 700; margin-bottom: 4px; padding: 0; }
+fieldset.tickrow label { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: 0; font-weight: 400; font-size: 15px; }
+input[type="time"] { width: 100%; max-width: 200px; height: 44px; padding: 0 12px; border: 1px solid var(--ink2); border-radius: var(--radius); background: var(--field); color: var(--ink); font: inherit; }
+@media (max-width: 560px) { .step { grid-template-columns: 1fr 1fr; } .step .muted { grid-column: 1 / -1; } }
