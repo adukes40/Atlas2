@@ -47,7 +47,7 @@
       <td><a href="{% url 'device360' %}?q={{ d.key|urlencode }}">{{ d.key }}</a></td>
       <td>{{ d.model|default:"—" }}</td>
       <td>{% if d.current and d.assigned %}Since {{ d.assigned|date:"M j, Y" }}{% elif d.current %}Now{% elif d.assigned %}{{ d.assigned|date:"M j, Y" }}{% else %}Never{% endif %}</td>
-      <td>{% if d.last_signed_in %}{{ d.last_signed_in|date:"M j, g:i A" }}{% else %}—{% endif %}</td>
+      <td>{% if d.last_signed_in %}{{ d.last_signed_in|date:"M j, Y" }}{% else %}—{% endif %}</td>
       <td><span class="chip{% if d.current %} ok{% elif d.someone_elses %} warn{% endif %}">{{ d.whose }}</span></td>
     </tr>
     {% endfor %}
