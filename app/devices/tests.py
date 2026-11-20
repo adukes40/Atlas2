@@ -1,7 +1,7 @@
 import json
 
 import requests
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from core.models import Organization
@@ -456,7 +456,7 @@ class PersonTests(TestCase):
     """Person 360, from the calls Incident IQ's own user page makes. Made-up people."""
 
     def setUp(self):
-        from reports.models import Device as CopiedDevice, Person as CopiedPerson
+        from reports.models import Device as CopiedDevice, Person as CopiedPerson, SignIn
 
         self.client.force_login(User.objects.create_user("tech"))
         config = IncidentIQConfig.load()
@@ -469,6 +469,8 @@ class PersonTests(TestCase):
         CopiedDevice.objects.create(serial="OTHER1", asset_tag="103991", in_iiq=True, owner_id="u-9",
                                     model="Dell Chromebook 3110", recent_user="jsample@students.example",
                                     last_sync=timezone.now() - timedelta(days=5))
+        SignIn.objects.create(email="jsample@students.example", serial="OTHER1", last_seen=timezone.now() - timedelta(days=5))
+        SignIn.objects.create(email="jsample@students.example", serial="OLD1", last_seen=datetime(2026, 1, 9, tzinfo=dt_timezone.utc))
 
     def routes(self):
         google = json.dumps([{"LastLoginDate": "2026-11-18", "OrgUnitPath": "/Students/North"}])
@@ -495,7 +497,7 @@ class PersonTests(TestCase):
         with incident_iq(self.routes(), others=self.others()):
             page = self.client.get(reverse("person360", args=["u-1"]))
         for expected in ("Jordan Sample", "Homeroom B214", "/Students/North", "Nov 18, 2026", "Theirs", "Jamie Park&#x27;s",
-                         "Was theirs", "Signed in to 103991 on ", "6 all time",
+                         "Was theirs", "Signed in to 103991 on ", "Jan 9, 2026", "6 all time",
                          "Cracked screen", "Math 7"):
             self.assertContains(page, expected)
 

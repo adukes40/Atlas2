@@ -170,6 +170,16 @@ class SyncTests(TestCase):
         self.assertEqual(Person.objects.get(user_id="u-3").chromebooks, 0)
         self.assertEqual(catalog.count(BY_SLUG["no-chromebook"]), 1)  # u-3, who has only a laptop
 
+    def test_a_sync_keeps_earlier_sign_ins(self):
+        from .models import SignIn
+
+        SignIn.objects.create(email="earlier@students.example", serial="7XK2RT3", last_seen=timezone.now() - timedelta(days=90))
+        sync()
+        self.assertTrue(SignIn.objects.filter(email="earlier@students.example").exists())
+        self.assertTrue(SignIn.objects.filter(email="friend@students.example").exists())
+        sync()  # a second night updates the same row
+        self.assertEqual(SignIn.objects.filter(email="friend@students.example").count(), 1)
+
     def test_without_google_incident_iqs_google_sync_fills_the_google_fields(self):
         GoogleConfig.objects.all().delete()
         synced = json.dumps([{"LastSyncDate": "2026-01-02", "OrgUnitPath": "/Students/North", "ChromebookStatus": "DISABLED",

@@ -137,6 +137,18 @@ class Sighting(models.Model):
     vlan = models.CharField(max_length=20, blank=True)
 
 
+class SignIn(models.Model):
+    """Who Google said last used a Chromebook, kept night after night. The nightly
+    copy only holds today's most recent user; this keeps the earlier ones."""
+
+    email = models.CharField(max_length=200)  # lowercased
+    serial = models.CharField(max_length=100)
+    last_seen = models.DateTimeField()  # the device's last sync while they were its most recent user
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["email", "serial"], name="one_sign_in_per_person_device")]
+
+
 class DailyCount(models.Model):
     """Each report's row count after each night's sync, for the Overview trend."""
 

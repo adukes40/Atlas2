@@ -28,7 +28,7 @@ from integrations.mist.normalize import normalize_ap, normalize_psk, normalize_w
 from integrations.models import GoogleConfig, IncidentIQConfig, MerakiConfig, MistConfig
 from integrations.network import mac_plain
 
-from .models import DailyCount, Device, NetDevice, Person, Psk, Sighting, SwitchPort, SyncRun, Wlan
+from .models import DailyCount, Device, NetDevice, Person, Psk, Sighting, SignIn, SwitchPort, SyncRun, Wlan
 
 log = logging.getLogger("atlas.sync")
 
@@ -527,7 +527,17 @@ def _finish(devices, persons, google_on):
         Person.objects.all().delete()
         Person.objects.bulk_create(persons.values(), batch_size=1000)
         Device.objects.bulk_create(devices.values(), batch_size=1000)
+        _keep_sign_ins(devices.values())
     return len(devices), len(persons)
+
+
+def _keep_sign_ins(devices):
+    # shortcut: rows are never pruned; at one per person per Chromebook it stays small for years.
+    rows = {(d.recent_user.lower(), d.serial.upper()): d.last_sync for d in devices if d.recent_user and d.last_sync}
+    SignIn.objects.bulk_create(
+        [SignIn(email=email, serial=serial, last_seen=when) for (email, serial), when in rows.items()],
+        update_conflicts=True, unique_fields=["email", "serial"], update_fields=["last_seen"], batch_size=1000,
+    )
 
 
 def _major(version):

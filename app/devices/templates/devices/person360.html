@@ -53,7 +53,7 @@
     {% endfor %}
     </tbody>
   </table></div>
-  <p class="note">Sign-ins are Chromebooks where Google's most recent user was this person in the last 30 days, as of the nightly sync. Older devices come from Incident IQ's assignment history.</p>
+  <p class="note">Sign-in dates are the last nightly sync where Google named this person a Chromebook's most recent user. Atlas keeps them from night to night, so the history starts when this was installed. Devices without a date come from Incident IQ's assignment history.</p>
   {% else %}
   <p class="muted">Incident IQ has no devices assigned to or used by this person.</p>
   {% endif %}

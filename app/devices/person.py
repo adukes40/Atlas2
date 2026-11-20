@@ -10,7 +10,7 @@ from django.db.models import Q
 from integrations.incidentiq.client import IncidentIQError
 from integrations.incidentiq.normalize import normalize_asset, normalize_ticket, normalize_user, normalize_user_fees
 from integrations.models import IncidentIQConfig
-from reports.models import Device as CopiedDevice, Person as CopiedPerson
+from reports.models import Device as CopiedDevice, Person as CopiedPerson, SignIn
 
 
 def find_people(query, limit=20):
@@ -42,7 +42,7 @@ class DeviceRow:
     model: str = ""
     assigned: datetime | None = None  # when it was assigned to this person
     current: bool = False  # assigned to them now
-    last_signed_in: datetime | None = None  # by this person, last 30 days
+    last_signed_in: datetime | None = None  # by this person, from Atlas's nightly sign-in history
     owner: str = ""  # who has it now, when that is someone else
 
     @property
@@ -89,7 +89,8 @@ class PersonResult:
 
     @property
     def signed_in(self):
-        return [d for d in self.devices if d.last_signed_in]
+        since = datetime.now(timezone.utc) - timedelta(days=30)
+        return [d for d in self.devices if d.last_signed_in and d.last_signed_in >= since]
 
     @property
     def not_theirs(self):
@@ -99,7 +100,7 @@ class PersonResult:
     def warnings(self):
         found = [
             f"Signed in to {d.key} on {d.last_signed_in:%b %-d}, which is assigned to {d.owner}."
-            for d in self.devices if d.someone_elses and d.last_signed_in
+            for d in self.signed_in if d.someone_elses
         ]
         if self.fees and self.fees.past_due > 0:
             found.append(f"{self.fees.past_due_display} past due in the Fee Tracker.")
@@ -152,13 +153,16 @@ def person360(user_id):
         if item.get("SerialNumber") and not item.get("IsAssetDeleted"):
             row(str(item["SerialNumber"]), asset_id=str(item.get("AssetId") or ""), tag=str(item.get("AssetTag") or ""),
                 model=str(item.get("ModelName") or ""), assigned=_when(item.get("AssignedDateUtc")))
-    # Chromebooks Google last saw them sign in to, from the nightly copy. Incident IQ's
+    # Chromebooks Google named them the most recent user of, night by night. Incident IQ's
     # per-person sign-in list needs a signed-in IIQ user, which an API token is not.
-    email = result.person.email
-    since = datetime.now(timezone.utc) - timedelta(days=30)
+    email = result.person.email.lower()
     if email:
-        for copied in CopiedDevice.objects.filter(recent_user__iexact=email, last_sync__gte=since):
-            row(copied.serial, tag=copied.asset_tag, model=copied.model or copied.google_model, last_signed_in=copied.last_sync)
+        sign_ins = {s.serial: s.last_seen for s in SignIn.objects.filter(email=email)}
+        copies = {c.serial.upper(): c for c in CopiedDevice.objects.filter(serial__in=sign_ins)}
+        for serial, when in sign_ins.items():
+            copied = copies.get(serial)
+            row(copied.serial if copied else serial, tag=copied.asset_tag if copied else "",
+                model=(copied.model or copied.google_model) if copied else "", last_signed_in=when)
 
     # Who has the devices that are not theirs, from the nightly copy.
     others = [d.serial.upper() for d in rows.values() if not d.current]
