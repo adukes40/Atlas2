@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ..network import Sighting
+from ..network import Sighting, mac_plain
 
 
 def _text(value):
@@ -24,6 +24,7 @@ def normalize_client(raw, site="", access_point=""):
         wireless=True,
         vlan=_text(raw.get("last_vlan")),
         policy=_text(raw.get("last_psk_name")),
+        ap_mac=mac_plain(raw.get("last_ap")),
     )
 
 

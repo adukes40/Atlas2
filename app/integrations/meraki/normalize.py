@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ..network import Connection, Sighting
+from ..network import Connection, Sighting, mac_plain
 
 
 def _text(value):
@@ -19,25 +19,35 @@ def _when(value):
     return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
 
 
-def normalize_client(raw):
-    """The most recent record across networks, or None if there is none."""
-    records = [r for r in raw.get("records") or [] if isinstance(r, dict)]
-    stamped = [(_when(r.get("lastSeen")), r) for r in records]
-    stamped = [(seen, r) for seen, r in stamped if seen]
-    if not stamped:
-        return None
-    last_seen, record = max(stamped, key=lambda pair: pair[0])
+def normalize_clients(raw):
+    """The latest Wi-Fi record and the latest switch record, newest first.
+    Meraki lists a Wi-Fi client on its access point's switch port too, seconds
+    apart, so keeping only the newest record would drop either the access point
+    or the port."""
+    stamped = [(_when(r.get("lastSeen")), r) for r in raw.get("records") or [] if isinstance(r, dict)]
+    found = []
+    for wireless in (True, False):
+        mine = [(seen, r) for seen, r in stamped if seen and bool(_text(r.get("ssid"))) == wireless]
+        if mine:
+            last_seen, record = max(mine, key=lambda pair: pair[0])
+            found.append(_sighting(raw, record, last_seen, wireless))
+    return sorted(found, key=lambda s: s.last_seen, reverse=True)
+
+
+def _sighting(raw, record, last_seen, wireless):
+    device_mac = _text(record.get("recentDeviceMac"))
     return Sighting(
         source="Meraki",
         place=_text((record.get("network") or {}).get("name")),
+        # Meraki's client search names neither the access point nor its serial; the lookup names it from the MAC.
         access_point=_text(record.get("recentDeviceName")) or _text(record.get("recentDeviceSerial")),
         ssid=_text(record.get("ssid")),
         ip=_text(record.get("ip")),
         last_seen=last_seen,
-        # Meraki also lists Wi-Fi clients on the switch port their access point uses.
-        wireless=bool(_text(record.get("ssid"))),
+        wireless=wireless,
         vlan=_text(record.get("vlan")),
-        switch_mac=_text(record.get("recentDeviceMac")),
+        ap_mac=mac_plain(device_mac) if wireless else "",
+        switch_mac=device_mac,
         switch_port=_text(record.get("switchport")),
         network_id=_text((record.get("network") or {}).get("id")),
         client_id=_text(raw.get("clientId")),

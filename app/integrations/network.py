@@ -22,6 +22,7 @@ class Sighting:
     wireless: bool = False
     vlan: str = ""
     policy: str = ""  # Mist: the PSK or policy name the device joined with
+    ap_mac: str = ""  # the access point it was last on, to find its name in the nightly gear copy
     # Meraki only: the switch and port it was last seen through, for the Connection card
     switch_mac: str = ""
     switch_port: str = ""

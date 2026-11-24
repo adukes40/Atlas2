@@ -62,6 +62,17 @@
   </div>
 </section>
 
+{% with ap=result.ap %}{% if ap %}
+<section class="card apbar" aria-label="Last access point">
+  <div><small class="src">Last access point</small><b class="ap-name">{{ ap.name }}</b></div>
+  <div><small class="src">Where</small>{{ ap.site|default:seen.place|default:"Unknown" }}</div>
+  <div><small class="src">When</small>{{ seen.last_seen_ago|default:"Unknown" }}</div>
+  {% if seen.ssid %}<div><small class="src">Network</small>{{ seen.ssid }}{% if seen.vlan %}, VLAN {{ seen.vlan }}{% endif %}</div>{% endif %}
+  {% if result.ap_uplink %}<div><small class="src">Uplink</small>{{ result.ap_uplink }}</div>{% endif %}
+  <div class="end"><span class="chip{% if ap.status == 'Online' %} ok{% elif ap.status %} warn{% endif %}">{{ ap.vendor }}{% if ap.model %} {{ ap.model }}{% endif %}{% if ap.status %} · {{ ap.status }}{% endif %}</span>{% if ap.url %} <a href="{{ ap.url }}" target="_blank" rel="noopener">Open in {{ ap.vendor }}</a>{% endif %}</div>
+</section>
+{% endif %}{% endwith %}
+
 {% if result.conflicts %}
 <div class="alert" role="status">
   <b>Incident IQ and Google disagree</b>
@@ -95,15 +106,19 @@
 
   <section class="card">
     <div class="card-head"><h2>Where it is</h2><span class="src">Mist · Meraki</span></div>
-    {% if seen %}
+    {% if result.ap %}
+    <p class="src">Last access point</p>
+    <p class="who"><b class="ap-name">{{ result.ap.name }}</b>{% if result.ap.status %} <span class="chip{% if result.ap.status == 'Online' %} ok{% else %} warn{% endif %}">{{ result.ap.status }}</span>{% endif %}</p>
+    <p class="muted">{{ result.ap.vendor }}{% if result.ap.model %} {{ result.ap.model }}{% endif %} at {{ result.ap.site|default:seen.place|default:"an unknown site" }} · {{ seen.last_seen_ago|default:"at an unknown time" }}{% if result.ap.url %} · <a href="{{ result.ap.url }}" target="_blank" rel="noopener">Open in {{ result.ap.vendor }}</a>{% endif %}</p>
+    {% elif seen %}
     <p class="who"><b>{{ seen.place|default:"Unknown site" }}</b></p>
     <p class="muted">Seen {{ seen.last_seen_ago|default:"at an unknown time" }} by {{ seen.source }}{% if not seen.wireless %}, wired{% endif %}</p>
     {% endif %}
     <dl>
-      {% if seen.access_point %}<div class="kv"><dt>Access point</dt><dd>{{ seen.access_point }}</dd></div>{% endif %}
+      {% if seen.access_point and not result.ap %}<div class="kv"><dt>Access point</dt><dd>{{ seen.access_point }}</dd></div>{% endif %}
       {% if seen.ssid %}<div class="kv"><dt>SSID</dt><dd>{{ seen.ssid }}</dd></div>{% endif %}
       {% if seen.vlan %}<div class="kv"><dt>VLAN</dt><dd>{{ seen.vlan }}</dd></div>{% endif %}
-      {% if seen.ip or book.last_ip %}<div class="kv"><dt>LAN IP</dt><dd class="mono">{{ seen.ip|default:book.last_ip }}</dd></div>{% endif %}
+      {% if seen.ip or book.last_ip %}<div class="kv"><dt>LAN IP</dt><dd class="mono">{% firstof seen.ip book.last_ip %}</dd></div>{% endif %}
       {% if book.wan_ip %}<div class="kv"><dt>WAN IP</dt><dd>{% if wan_on_network is True %}<span class="chip ok">On our network</span> {% elif wan_on_network is False %}<span class="chip warn">Off network</span> {% endif %}<span class="mono">{{ book.wan_ip }}</span></dd></div>{% endif %}
       {% for mac in book.macs %}<div class="kv"><dt>{% if forloop.first %}MAC{% endif %}</dt><dd class="mono">{{ mac }}</dd></div>{% endfor %}
       {% if seen.last_seen %}<div class="kv"><dt>Last seen</dt><dd>{{ seen.last_seen|date:"M j, g:i A" }} UTC</dd></div>{% endif %}
@@ -114,7 +129,7 @@
     {% endif %}
     {% for part in result.network %}
     {% if part.state == "error" %}<p class="warn">{{ part.name }}: {{ part.message }}</p>
-    {% elif part.state == "not_found" %}<p class="note">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
+    {% elif part.state == "not_found" and not seen %}<p class="note">{% if part.message %}{{ part.message }}{% else %}{{ part.name }} has not seen this device in the last week.{% endif %}</p>{% endif %}
     {% endfor %}
     {% if not result.network_connected %}
     <p class="note">Where this device was last on the wireless network will show here once Mist or Meraki is connected.</p>

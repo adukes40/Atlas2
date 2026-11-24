@@ -64,8 +64,8 @@ class MerakiClient:
         data = self._get(f"/organizations/{quote(self.org_id, safe='')}/clients/search", {"mac": pretty})
         return data if isinstance(data, dict) else None
 
-    def switch_by_mac(self, mac):
-        """The switch with this MAC, or None. Remembered for a day: switches rarely move."""
+    def device_by_mac(self, mac):
+        """The switch or access point with this MAC, or None. Remembered for a day: they rarely move."""
 
         def fetch():
             found = self._get(f"/organizations/{quote(self.org_id, safe='')}/devices", {"mac": mac}) or []
