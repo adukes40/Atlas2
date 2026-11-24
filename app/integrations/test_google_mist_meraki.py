@@ -12,7 +12,7 @@ from .google import client as google_client
 from .google.client import GoogleClient, GoogleError, read_key
 from .google.normalize import normalize_chromebook
 from .meraki.client import MerakiClient, MerakiError
-from .meraki.normalize import normalize_client as meraki_sighting
+from .meraki.normalize import normalize_clients as meraki_sightings
 from .mist.client import MistClient, MistError, api_host
 from .models import GoogleConfig, MerakiConfig, MistConfig
 from .network import mac_plain
@@ -176,7 +176,7 @@ class MerakiTests(Fresh, SimpleTestCase):
         self.assertEqual(fake.calls[0][2]["params"]["mac"], "a1:b2:c3:d4:e5:f6")
 
     def test_the_most_recent_network_wins(self):
-        seen = meraki_sighting(
+        (seen,) = meraki_sightings(
             {
                 "records": [
                     {"network": {"name": "Old"}, "lastSeen": 1700000000},
@@ -186,7 +186,21 @@ class MerakiTests(Fresh, SimpleTestCase):
             }
         )
         self.assertEqual((seen.place, seen.access_point, seen.source), ("New", "Q2XX", "Meraki"))
-        self.assertIsNone(meraki_sighting({"records": []}))
+        self.assertEqual(meraki_sightings({"records": []}), [])
+
+    def test_wifi_and_its_access_points_switch_port_are_both_kept(self):
+        port, wifi = meraki_sightings(  # newest first
+            {
+                "records": [
+                    {"network": {"name": "North-switch"}, "lastSeen": 1795540961, "switchport": "13",
+                     "recentDeviceMac": "ac:17:c8:00:00:99"},
+                    {"network": {"name": "North-wireless"}, "lastSeen": 1795540900, "ssid": "Students",
+                     "recentDeviceMac": "88:15:44:00:00:01"},
+                ]
+            }
+        )
+        self.assertEqual((wifi.place, wifi.wireless, wifi.ap_mac), ("North-wireless", True, "881544000001"))
+        self.assertEqual((port.place, port.wireless, port.switch_port, port.ap_mac), ("North-switch", False, "13", ""))
 
     def test_mac_plain(self):
         self.assertEqual(mac_plain("A1:B2:C3:D4:E5:F6"), "a1b2c3d4e5f6")

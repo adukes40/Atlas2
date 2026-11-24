@@ -31,6 +31,9 @@ from integrations.testing import (
     items,
 )
 
+from reports.models import NetDevice
+from reports.models import Sighting as NightlySighting
+
 from .models import LookupLog
 
 User = get_user_model()
@@ -352,7 +355,7 @@ class GoogleAndNetworkTests(TestCase):
         organization.save()
         self.assertContains(self.look_up(), "Off network")
         # Mist saw it more recently than Meraki, so Mist leads the network card.
-        self.assertContains(page, "<b>North Middle School</b>")
+        self.assertContains(page, "Mist at North Middle School")
         self.assertEqual(GoogleConfig.load().state, "Connected")
 
     def test_disagreements_with_google_are_listed(self):
@@ -377,7 +380,7 @@ class GoogleAndNetworkTests(TestCase):
         ]:
             self.assertContains(page, expected)
         # The switch sighting does not take over "Where it is" from Mist.
-        self.assertContains(page, "<b>North Middle School</b>")
+        self.assertContains(page, "Mist at North Middle School")
         self.assertNotContains(page, "North-switch")
 
     def test_a_wired_device_shows_its_own_port(self):
@@ -395,20 +398,60 @@ class GoogleAndNetworkTests(TestCase):
         routes[f"{MERAKI_API}/devices/Q2KW-0000-0001/switch/ports/38"] = FakeResponse(status=500)
         page = self.look_up(routes)
         self.assertContains(page, "Meraki: Meraki had an internal error")
-        self.assertContains(page, "<b>North Middle School</b>")
+        self.assertContains(page, "Mist at North Middle School")
 
     def test_a_google_problem_does_not_sink_the_lookup(self):
         self.connect()
         page = self.look_up(dict(STANDARD_OTHERS, **{GOOGLE_DEVICES_URL: FakeResponse(status=500)}))
         self.assertContains(page, "Jordan Sample")
         self.assertContains(page, "Google had an internal error (HTTP 500).")
-        self.assertContains(page, "Atlas finds devices on the network by the MAC address", count=2)
         self.assertEqual(GoogleConfig.load().state, "Error")
+        # No MAC from Google, so Mist is asked for the serial as the device's name.
+        self.assertContains(page, "Mist at North Middle School")
+
+    def test_no_mac_and_no_name_in_mist(self):
+        self.connect()
+        page = self.look_up(dict(STANDARD_OTHERS, **{
+            GOOGLE_DEVICES_URL: FakeResponse(status=500),
+            f"{MIST_API}/orgs/{MIST_ORG}/clients/search": FakeResponse(data={"results": []}),
+        }))
+        self.assertContains(page, "Atlas finds devices on the network by the MAC address", count=2)
 
     def test_a_chromebook_google_does_not_have(self):
         self.connect(mist=False, meraki=False)
         page = self.look_up(dict(STANDARD_OTHERS, **{GOOGLE_DEVICES_URL: FakeResponse(data={})}))
         self.assertContains(page, "Google Workspace has no Chromebook with serial")
+
+    def test_a_device_on_meraki_wifi_shows_its_named_access_point(self):
+        self.connect()
+        NetDevice.objects.create(mac="881544000001", vendor="Meraki", kind="Access point", name="NMS-AP-301",
+                                 model="MR42", status="Online", site="North-wireless", url="https://dashboard.example/ap")
+        meraki = FakeResponse(data={"mac": "a1:b2:c3:d4:e5:f6", "clientId": "k000001", "records": [
+            {"network": {"id": "N_1", "name": "North-switch"}, "ssid": None, "vlan": "120", "switchport": "38",
+             "recentDeviceMac": "ac:17:c8:00:00:99", "lastSeen": "2026-11-13T18:00:30Z"},
+            {"network": {"id": "N_2", "name": "North-wireless"}, "ssid": "Students", "vlan": "120",
+             "recentDeviceMac": "88:15:44:00:00:01", "lastSeen": "2026-11-13T18:00:00Z"},
+        ]})
+        page = self.look_up(dict(STANDARD_OTHERS, **MERAKI_SWITCH_ROUTES, **{
+            f"{MIST_API}/orgs/{MIST_ORG}/clients/search": FakeResponse(data={"results": []}),
+            f"{MERAKI_API}/organizations/{MERAKI_ORG}/clients/search": meraki,
+        }))
+        self.assertContains(page, "Last access point</small>")  # the bar
+        self.assertContains(page, "NMS-AP-301")
+        self.assertContains(page, "Meraki MR42 · Online")
+        self.assertContains(page, "North-IDF-5, port 38")  # the access point's uplink, not a wired device
+        self.assertContains(page, 'href="https://dashboard.example/ap"')
+        self.assertNotContains(page, "by Meraki, wired")
+        self.assertNotContains(page, "Mist has not seen this device")
+
+    def test_the_nightly_copy_remembers_past_a_week(self):
+        self.connect(meraki=False)
+        NightlySighting.objects.create(mac="a1b2c3d4e5f6", last_seen="2026-10-01T12:00:00Z", place="South High")
+        page = self.look_up(
+            dict(STANDARD_OTHERS, **{f"{MIST_API}/orgs/{MIST_ORG}/clients/search": FakeResponse(data={"results": []})})
+        )
+        self.assertContains(page, "<b>South High</b>")
+        self.assertNotContains(page, "Mist has not seen this device")
 
     def test_not_seen_on_the_network(self):
         self.connect(meraki=False)

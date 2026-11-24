@@ -12,7 +12,9 @@ from integrations.incidentiq.normalize import Device, normalize_asset, normalize
 from integrations.meraki import normalize as meraki_normalize
 from integrations.mist import normalize as mist_normalize
 from integrations.models import GoogleConfig, IncidentIQConfig, IncidentIQLocation, MerakiConfig, MistConfig
-from integrations.network import Sighting
+from integrations.network import Sighting, mac_plain
+from reports.models import NetDevice
+from reports.models import Sighting as NightlySighting
 
 FOUND, NOT_FOUND, NOT_CONNECTED, ERROR = "found", "not_found", "not_connected", "error"
 
@@ -47,6 +49,18 @@ class LookupResult:
 
     connection: object = None  # integrations.network.Connection, from Meraki
     connection_message: str = ""
+    ap: NetDevice | None = None  # the access point it was last on, from the nightly gear copy when known
+
+    @property
+    def ap_uplink(self):
+        """The switch port behind the access point: the live answer, else the nightly copy."""
+        if self.connection and self.sighting and self.sighting.wireless:
+            return f"{self.connection.switch}, port {self.connection.port}"
+        ap = self.ap
+        if not ap:
+            return ""
+        switch, port = (ap.uplink_switch, ap.uplink_port) if ap.uplink_switch else (ap.reported_switch, ap.reported_port)
+        return f"{switch}, port {port}" if switch and port else switch
 
     @property
     def sighting(self):
@@ -182,28 +196,56 @@ def _add_google(result):
         result.chromebook = normalize_chromebook(raw)
 
 
+def _gear(mac):
+    return NetDevice.objects.filter(mac=mac).first() if mac else None
+
+
 def _mist(client, macs):
     for mac in macs:
         raw = client.find_client(mac)
         if raw:
             site = client.site_name(raw.get("site_id") or "")
-            ap = client.access_point_name(raw.get("last_ap") or "")
-            return mist_normalize.normalize_client(raw, site=site, access_point=ap)
-    return None
+            known = _gear(mac_plain(raw.get("last_ap")))
+            ap = known.name if known else client.access_point_name(raw.get("last_ap") or "")
+            return [mist_normalize.normalize_client(raw, site=site, access_point=ap)]
+    return _nightly(macs)
+
+
+def _nightly(macs):
+    """Mist's live search covers a week; the nightly copy remembers longer."""
+    row = NightlySighting.objects.filter(mac__in=macs).order_by("-last_seen").first()
+    if not row:
+        return []
+    return [Sighting(source="Mist", place=row.place, ssid=row.ssid, last_seen=row.last_seen,
+                     wireless=True, vlan=row.vlan, policy=row.policy)]
 
 
 def _meraki(client, macs):
     for mac in macs:
         raw = client.find_client(mac)
-        sighting = meraki_normalize.normalize_client(raw) if raw else None
-        if sighting:
-            return sighting
-    return None
+        sightings = meraki_normalize.normalize_clients(raw) if raw else []
+        for seen in sightings:
+            if seen.ap_mac and not seen.access_point:
+                known = _gear(seen.ap_mac)
+                seen.access_point = known.name if known else (client.device_by_mac(seen.switch_mac) or {}).get("name") or ""
+        if sightings:
+            return sightings
+    return []
+
+
+def _macs_by_hostname(result):
+    """No MAC from Google: Mist may know the Chromebook by its serial as its hostname."""
+    config = MistConfig.load()
+    serial = result.device.serial
+    if not config.configured or not serial:
+        return []
+    raw = _ask(config, Part(config.name), lambda client: client.find_client(serial, by="hostname"))
+    return [mac for mac in [mac_plain((raw or {}).get("mac"))] if mac]
 
 
 def _add_network(result):
     """Mist and Meraki find the device by the MAC addresses Google reports."""
-    macs = result.chromebook.macs if result.chromebook else []
+    macs = (result.chromebook.macs if result.chromebook else []) or _macs_by_hostname(result)
     for model, ask in ((MistConfig, _mist), (MerakiConfig, _meraki)):
         config = model.load()
         part = Part(config.name)
@@ -212,13 +254,19 @@ def _add_network(result):
             continue
         part.state = NOT_FOUND
         if not macs:
-            part.message = "Atlas finds devices on the network by the MAC address Google Workspace reports."
+            part.message = (
+                "Atlas finds devices on the network by the MAC address Google Workspace reports,"
+                " or by the serial number when Mist knows it as the device's name."
+            )
             continue
-        sighting = _ask(config, part, lambda client: ask(client, macs))
-        if sighting:
+        sightings = _ask(config, part, lambda client: ask(client, macs))
+        if sightings:
             part.state = FOUND
-            result.sightings.append(sighting)
+            result.sightings.extend(sightings)
     result.sightings.sort(key=lambda s: s.last_seen or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    seen = result.sighting
+    if seen and seen.wireless and seen.access_point:
+        result.ap = _gear(seen.ap_mac) or NetDevice(name=seen.access_point, vendor=seen.source, site=seen.place)
 
 
 def _add_connection(result):
@@ -230,7 +278,7 @@ def _add_connection(result):
         return
 
     def ask(client):
-        device = client.switch_by_mac(seen.switch_mac)
+        device = client.device_by_mac(seen.switch_mac)
         if not device:
             return None
         port = client.switch_port(device["serial"], seen.switch_port)

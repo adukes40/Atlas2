@@ -76,10 +76,10 @@ class MistClient:
             raise MistError("This token has no organization access. Create the token under Organization > Settings.")
         raise MistError("This token can see more than one organization. Enter the Org ID to use.")
 
-    def find_client(self, mac):
-        """The most recent wireless client record for this MAC in the last week, or None."""
+    def find_client(self, mac, by="mac"):
+        """The most recent wireless client record for this MAC (or hostname) in the last week, or None."""
         data = self._get(
-            f"/orgs/{quote(self.org_id, safe='')}/clients/search", {"mac": mac, "duration": "7d", "limit": 5}
+            f"/orgs/{quote(self.org_id, safe='')}/clients/search", {by: mac, "duration": "7d", "limit": 5}
         )
         results = [r for r in (data or {}).get("results") or [] if isinstance(r, dict)]
         return max(results, key=lambda r: r.get("timestamp") or 0, default=None)
